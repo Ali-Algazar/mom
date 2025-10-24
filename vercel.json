@@ -15,5 +15,12 @@
          "src": "/(.*)",
          "dest": "index.js"
      }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/cron/send-reminders",
+      "schedule": "0 6 * * *" 
+    }
   ]
+ 
 }
