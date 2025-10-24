@@ -1,4 +1,4 @@
-// index.js (الملف الرئيسي)
+// index.js (النهائي لـ Vercel)
 
 const express = require('express');
 const connectDB = require('./config/db');
@@ -9,18 +9,20 @@ const helmet = require('helmet');
 
 dotenv.config();
 connectDB(); // الاتصال بقاعدة البيانات
-require('./jobs/notificationScheduler'); // تشغيل ساعي البريد
+require('./config/firebaseAdmin'); // تهيئة Firebase Admin (مهم!)
+// مبقناش بنعمل require لـ notificationScheduler هنا، المسار هو اللي هيشغله
 
 const app = express();
-const PORT = process.env.PORT || 3000; // <-- غير السطر ده
+// --- مهم: Vercel بيحتاج البورت من الـ env ---
+const PORT = process.env.PORT || 3000;
 
-// --- Middlewares الأساسية ---
+// --- Middlewares ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use(helmet());
 
-// --- استيراد ملفات المسارات (Routes) ---
+// --- استيراد المسارات ---
 const mainRoutes = require('./routes/mainRoutes');
 const authRoutes = require('./routes/authRoutes');
 const childRoutes = require('./routes/childRoutes');
@@ -36,10 +38,11 @@ const faqRoutes = require('./routes/faqRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const recipeRoutes = require('./routes/recipeRoutes');
 const soundRoutes = require('./routes/soundRoutes');
-const postRoutes = require('./routes/postRoutes'); // <-- (1. استيراد جديد)
-const commentRoutes = require('./routes/commentRoutes'); // <-- (2. استيراد جديد)
+const postRoutes = require('./routes/postRoutes');
+const commentRoutes = require('./routes/commentRoutes');
+const cronRoutes = require('./routes/cronRoutes'); // <-- (1. استيراد المسار الجديد)
 
-// --- استخدام المسارات (Mounting Routes) ---
+// --- تركيب المسارات ---
 app.use('/', mainRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/children', childRoutes);
@@ -55,14 +58,19 @@ app.use('/api/v1/faqs', faqRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/recipes', recipeRoutes);
 app.use('/api/v1/sounds', soundRoutes);
-app.use('/api/v1/posts', postRoutes); // <-- (3. استخدام مسار البوستات)
-app.use('/api/v1/comments', commentRoutes); // <-- (4. استخدام مسار الكومنتات)
+app.use('/api/v1/posts', postRoutes);
+app.use('/api/v1/comments', commentRoutes);
+app.use('/api/v1/cron', cronRoutes); // <-- (2. استخدام المسار الجديد)
 
-// --- معالجات الأخطاء (تكون في النهاية) ---
+// --- معالجات الأخطاء ---
 app.use(notFound);
 app.use(errorHandler);
 
-// --- تشغيل السيرفر ---
-app.listen(PORT, () => {
-  console.log(`🚀 السيرفر يعمل الآن بهيكلة احترافية على http://localhost:${PORT}`);
-});
+// --- بدء السيرفر ---
+// Vercel هو اللي بيشغل السيرفر عن طريق إعدادات الـ builds
+// app.listen(PORT, () => {
+//   console.log(`🚀 السيرفر شغال على بورت ${PORT}`);
+// });
+
+// --- تصدير الـ app عشان Vercel ---
+module.exports = app; // مهم لـ Vercel!
