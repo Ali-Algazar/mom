@@ -9,6 +9,11 @@ const medicineSchema = new mongoose.Schema(
       required: [true, 'الرجاء إدخال اسم الدواء'],
       unique: true,
     },
+    image: {
+      type: String,
+      required: [true, 'الرجاء إدخال رابط صورة الدواء'],
+      unique: true,
+    },
     description: {
       type: String,
       required: [true, 'الرجاء إدخال وصف الدواء'],
