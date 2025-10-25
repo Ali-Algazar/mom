@@ -9,10 +9,9 @@ const medicineSchema = new mongoose.Schema(
       required: [true, 'الرجاء إدخال اسم الدواء'],
       unique: true,
     },
-    image: {
-      type: String,
-      required: [true, 'الرجاء إدخال رابط صورة الدواء'],
-      unique: true,
+imageUrl: {
+        type: String,
+        default: 'https://via.placeholder.com/150?text=Medicine+Image' // صورة افتراضية
     },
     description: {
       type: String,

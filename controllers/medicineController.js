@@ -9,7 +9,7 @@ const Medicine = require('../models/medicineModel');
  * @access  Private/Admin
  */
 const createMedicine = asyncHandler(async (req, res) => {
-  const { name, description, category, usage, sideEffects } = req.body;
+  const { name, description, category, usage, sideEffects , imageUrl } = req.body;
 
   if (!name || !description || !category || !usage) {
     res.status(400);
@@ -22,6 +22,7 @@ const createMedicine = asyncHandler(async (req, res) => {
     category,
     usage,
     sideEffects,
+    imageUrl,
     addedBy: req.user.id, // الربط بالأدمن الذي أنشأه
   });
 
