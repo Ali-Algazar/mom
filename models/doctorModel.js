@@ -22,6 +22,15 @@ const doctorSchema = new mongoose.Schema(
       type: String,
       required: [true, 'الرجاء إدخال اسم الطبيب أو المركز'],
     },
+    imageUrl: {
+      type: String,
+      required: [true, 'الرجاءإدخال صورة الطبيب او المركز'
+
+
+      ],
+       default: 'https://via.placeholder.com/150?text=Medicine+Image'
+      
+    },
     address: {
       type: String,
       required: [true, 'الرجاء إدخال العنوان'],

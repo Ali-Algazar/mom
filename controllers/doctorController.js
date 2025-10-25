@@ -9,14 +9,15 @@ const Doctor = require('../models/doctorModel');
  * @access  Private/Admin
  */
 const createDoctor = asyncHandler(async (req, res) => {
-  const { name, address, phone, specialty, location } = req.body;
+  const { name, address, phone, specialty, location, imageUrl } = req.body;
 
   // التحقق من المدخلات الأساسية
   if (
     !name ||
+    !imageUrl ||
     !address ||
     !location ||
-    !location.coordinates ||
+    !location.coordinates || 
     location.coordinates.length !== 2
   ) {
     res.status(400);
@@ -27,6 +28,7 @@ const createDoctor = asyncHandler(async (req, res) => {
 
   const doctor = await Doctor.create({
     name,
+    imageUrl,
     address,
     phone,
     specialty,
