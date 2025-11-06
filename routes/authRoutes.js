@@ -3,20 +3,23 @@
 const express = require('express');
 const router = express.Router();
 
-// 1. استيراد الوظائف الجديدة
 const {
   registerUser,
   loginUser,
+  googleLogin, // <-- استيراد
+  facebookLogin, // <-- استيراد
   getMe,
   updateMe,
   deleteMe,
-  updateFcmToken, // <-- إضافة جديدة
+  updateFcmToken,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
 // --- المسارات العامة (Public) ---
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/google', googleLogin); // <-- إضافة مسار جوجل
+router.post('/facebook', facebookLogin); // <-- إضافة مسار فيسبوك
 
 // --- المسارات الخاصة بالمستخدم (Private /me) ---
 router
@@ -25,7 +28,6 @@ router
   .put(protect, updateMe)
   .delete(protect, deleteMe);
 
-// --- (2. المسار الجديد للإشعارات) ---
 // (لتحديث "عنوان" هاتف المستخدم)
 router.put('/fcmtoken', protect, updateFcmToken);
 
