@@ -2,195 +2,206 @@
 
 const User = require('../models/userModel');
 const Child = require('../models/childModel');
-const ChildVaccination = require('../models/childVaccinationModel');
-const GrowthRecord = require('../models/growthRecordModel');
-const DailyLog = require('../models/dailyLogModel');
-const DiaryEntry = require('../models/diaryEntryModel');
-const bcrypt = require('bcryptjs'); 
-const jwt = require('jsonwebtoken'); 
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const asyncHandler = require('express-async-handler');
-// --- (1. استيراد المكتبات الجديدة) ---
-const { OAuth2Client } = require('google-auth-library');
-const axios = require('axios');
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-// ----------------------------------
-
-// --- (2. وظيفة مساعدة لإصدار التوكن بتاعنا) ---
-const generateTokenAndRespond = (res, user) => {
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+// دالة توليد التوكن
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
-  res.status(200).json({
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    avatar: user.avatar, // (رجعنا الصورة كمان)
-    token: token,
-  });
 };
-// ----------------------------------
 
 /**
- * @desc    تسجيل مستخدم جديد
+ * @desc    تسجيل أم جديدة (User)
  * @route   POST /api/v1/auth/register
+ * @access  Public
  */
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) {
-    res.status(400); throw new Error('الرجاء إدخال جميع الحقول');
+  const { name, email, password, nationalId } = req.body;
+
+  // التحقق من البيانات
+  if (!name || !email || !password || !nationalId) {
+    res.status(400);
+    throw new Error('الرجاء إدخال الاسم، الإيميل، الرقم السري، والرقم القومي');
   }
-  if (password.length < 6) {
-     res.status(400); throw new Error('كلمة المرور يجب أن تكون 6 حروف على الأقل');
-  }
-  const userExists = await User.findOne({ email });
+
+  // التحقق من التكرار
+  const userExists = await User.findOne({ $or: [{ email }, { nationalId }] });
   if (userExists) {
-    res.status(400); throw new Error('هذا البريد الإلكتروني مسجل مسبقاً');
+    res.status(400);
+    throw new Error('البريد الإلكتروني أو الرقم القومي مسجل مسبقاً');
   }
+
+  // تشفير كلمة المرور
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
+
+  // إنشاء الأم
   const user = await User.create({
     name,
     email,
     password: hashedPassword,
+    nationalId,
+    role: 'user'
   });
 
   if (user) {
-    generateTokenAndRespond(res, user); // (استخدام الوظيفة المساعدة)
+    // 🔥 الربط التلقائي 🔥
+    // أي طفل مسجل بالرقم القومي للأم دي، نربطه بيها فوراً
+    await Child.updateMany(
+      { motherNationalId: nationalId }, 
+      { parentUser: user._id }          
+    );
+
+    res.status(201).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token: generateToken(user._id),
+      message: "تم إنشاء الحساب وربط الأطفال المسجلين بنجاح"
+    });
   } else {
-    res.status(400); throw new Error('بيانات المستخدم غير صالحة');
+    res.status(400);
+    throw new Error('بيانات غير صحيحة');
+  }
+});
+
+/**
+ * @desc    إنشاء حساب موظف جديد (Staff)
+ * @route   POST /api/v1/admin/create-staff
+ * @access  Private (Super Admin Only)
+ */
+const createStaff = asyncHandler(async (req, res) => {
+  const { name, email, password, nationalId, workplace } = req.body;
+
+  // التحقق من بيانات مكان العمل
+  if (!workplace || !workplace.governorate || !workplace.city || !workplace.healthUnit) {
+    res.status(400);
+    throw new Error('يجب تحديد مكان عمل الموظف بدقة (المحافظة، المدينة، الوحدة)');
+  }
+
+  const staffExists = await User.findOne({ email });
+  if (staffExists) {
+    res.status(400);
+    throw new Error('الموظف مسجل بالفعل');
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  const staff = await User.create({
+    name,
+    email,
+    password: hashedPassword,
+    nationalId,
+    role: 'staff', // تحديد الدور كموظف
+    workplace: workplace // تخزين مكان العمل
+  });
+
+  if (staff) {
+    res.status(201).json({
+      _id: staff._id,
+      name: staff.name,
+      email: staff.email,
+      role: staff.role,
+      workplace: staff.workplace
+    });
+  } else {
+    res.status(400);
+    throw new Error('فشل إنشاء حساب الموظف');
   }
 });
 
 /**
  * @desc    تسجيل الدخول
  * @route   POST /api/v1/auth/login
+ * @access  Public
  */
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    res.status(400); throw new Error('الرجاء إدخال الإيميل وكلمة المرور');
-  }
-  // (لازم نطلب الباسورد عشان نقارنه)
-  const user = await User.findOne({ email }).select('+password'); 
+
+  const user = await User.findOne({ email }).select('+password');
+
   if (user && (await bcrypt.compare(password, user.password))) {
-    generateTokenAndRespond(res, user); // (استخدام الوظيفة المساعدة)
-  } else {
-    res.status(401); throw new Error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
-  }
-});
-
-// --- (3. الوظيفة الجديدة لتسجيل الدخول بجوجل) ---
-/**
- * @desc    التسجيل بجوجل
- * @route   POST /api/v1/auth/google
- */
-const googleLogin = asyncHandler(async (req, res) => {
-  const { idToken } = req.body; // Flutter هيبعت الـ idToken
-
-  if (!idToken) {
-    res.status(400);
-    throw new Error('لم يتم إرسال Google ID Token');
-  }
-
-  // 1. التحقق من التوكن من جوجل
-  const ticket = await client.verifyIdToken({
-      idToken: idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-  });
-  const { name, email, picture, sub: googleId } = ticket.getPayload();
-
-  // 2. البحث عن المستخدم في قاعدة بياناتنا بالإيميل
-  let user = await User.findOne({ email: email });
-
-  if (user) {
-    // المستخدم موجود (سجل قبل كده بالإيميل أو بجوجل)
-    if (!user.googleId) {
-      // لو سجل بالإيميل قبل كده، اربط حسابه بجوجل
-      user.googleId = googleId;
-      user.avatar = user.avatar || picture; // حدث الصورة لو مكنش عنده
-      await user.save();
-    }
-    // 3. إصدار التوكن بتاعنا
-    generateTokenAndRespond(res, user);
-  } else {
-    // المستخدم ده جديد، اعمل له حساب
-    const newUser = await User.create({
-      googleId: googleId,
-      name: name,
-      email: email,
-      avatar: picture,
-      // (مفيش باسورد)
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      workplace: user.workplace, // بنرجع مكان العمل لو موظف عشان الـ Frontend يحتاجه
+      token: generateToken(user._id),
     });
-    // 3. إصدار التوكن بتاعنا
-    generateTokenAndRespond(res, newUser);
+  } else {
+    res.status(401);
+    throw new Error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
   }
 });
 
-// --- (4. الوظيفة الجديدة لتسجيل الدخول بفيسبوك) ---
 /**
- * @desc    التسجيل بفيسبوك
- * @route   POST /api/v1/auth/facebook
+ * @desc    جلب بياناتي
+ * @route   GET /api/v1/auth/me
+ * @access  Private
  */
-const facebookLogin = asyncHandler(async (req, res) => {
-    const { accessToken } = req.body; // Flutter هيبعت الـ accessToken
-
-    if (!accessToken) {
-        res.status(400);
-        throw new Error('لم يتم إرسال Facebook Access Token');
-    }
-
-    // 1. التحقق من التوكن من فيسبوك
-    const url = `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${accessToken}`;
-    const { data } = await axios.get(url);
-    const { id: facebookId, name, email, picture } = data;
-
-    if (!email) {
-        // (مهم: أحيانًا فيسبوك مش بيرجع الإيميل لو المستخدم رفض)
-        res.status(400);
-        throw new Error('لم نتمكن من الحصول على الإيميل من فيسبوك. يرجى المحاولة بجوجل أو التسجيل اليدوي.');
-    }
-
-    // 2. البحث عن المستخدم في قاعدة بياناتنا بالإيميل
-    let user = await User.findOne({ email: email });
-
-    if (user) {
-        // المستخدم موجود
-        if (!user.facebookId) {
-            user.facebookId = facebookId;
-            user.avatar = user.avatar || picture.data.url;
-            await user.save();
-        }
-        generateTokenAndRespond(res, user);
-    } else {
-        // المستخدم جديد
-        const newUser = await User.create({
-            facebookId: facebookId,
-            name: name,
-            email: email,
-            avatar: picture.data.url,
-            // (مفيش باسورد)
-        });
-        generateTokenAndRespond(res, newUser);
-    }
+const getMe = asyncHandler(async (req, res) => {
+  res.status(200).json(req.user);
 });
 
+// ... (الكود القديم فوق) ...
 
-// ... (باقي الوظائف: getMe, updateMe, deleteMe, updateFcmToken) ...
-const getMe = asyncHandler(async (req, res) => { /* ... code ... */ });
-const updateMe = asyncHandler(async (req, res) => { /* ... code ... */ });
-const deleteMe = asyncHandler(async (req, res) => { /* ... code ... */ });
-const updateFcmToken = asyncHandler(async (req, res) => { /* ... code ... */ });
+/**
+ * @desc    إنشاء أول أدمن (مؤقت)
+ * @route   POST /api/v1/auth/setup-admin
+ * @access  Public
+ */
+const createFirstAdmin = asyncHandler(async (req, res) => {
+  const { name, email, password, nationalId, secretKey } = req.body;
 
-// 5. تحديث الـ Exports
+  // 1. حماية بسيطة: لازم تبعت المفتاح السري ده
+  if (secretKey !== 'admin-setup-123') {
+    res.status(403);
+    throw new Error('مفتاح الأمان غير صحيح! لا تحاول الاختراق.');
+  }
+
+  // 2. التحقق من التكرار
+  const userExists = await User.findOne({ email });
+  if (userExists) {
+    res.status(400); throw new Error('الأدمن موجود بالفعل');
+  }
+
+  // 3. إنشاء السوبر أدمن
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  const admin = await User.create({
+    name,
+    email,
+    password: hashedPassword,
+    nationalId, // حتى الأدمن محتاج رقم قومي عشان الداتابيز متزعلش
+    role: 'super_admin' // 🔥 أهم حتة 🔥
+  });
+
+  if (admin) {
+    res.status(201).json({
+      _id: admin._id,
+      name: admin.name,
+      email: admin.email,
+      role: admin.role,
+      token: generateToken(admin._id),
+      message: "تم إنشاء السوبر أدمن بنجاح! امسح الكود ده فوراً."
+    });
+  } else {
+    res.status(400); throw new Error('فشل الإنشاء');
+  }
+});
+
+// متنساش تضيف الدالة الجديدة هنا 👇
 module.exports = {
   registerUser,
+  createStaff,
   loginUser,
-  googleLogin, // <-- إضافة
-  facebookLogin, // <-- إضافة
   getMe,
-  updateMe,
-  deleteMe,
-  updateFcmToken,
+  createFirstAdmin, // <-- ضيفتها هنا
 };

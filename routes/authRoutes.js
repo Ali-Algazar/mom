@@ -2,33 +2,34 @@
 
 const express = require('express');
 const router = express.Router();
-
 const {
   registerUser,
   loginUser,
-  googleLogin, // <-- استيراد
-  facebookLogin, // <-- استيراد
   getMe,
-  updateMe,
-  deleteMe,
-  updateFcmToken,
+  createStaff, // <-- الدالة الجديدة
 } = require('../controllers/authController');
-const { protect } = require('../middleware/authMiddleware');
 
-// --- المسارات العامة (Public) ---
-router.post('/register', registerUser);
+const { protect, authorize } = require('../middleware/authMiddleware');
+
+// مسارات عامة (أي حد يقدر يدخلها)
+router.post('/register', registerUser); // تسجيل الأم
 router.post('/login', loginUser);
-router.post('/google', googleLogin); // <-- إضافة مسار جوجل
-router.post('/facebook', facebookLogin); // <-- إضافة مسار فيسبوك
 
-// --- المسارات الخاصة بالمستخدم (Private /me) ---
-router
-  .route('/me')
-  .get(protect, getMe)
-  .put(protect, updateMe)
-  .delete(protect, deleteMe);
+// مسارات خاصة (تحتاج توكن)
+router.get('/me', protect, getMe);
 
-// (لتحديث "عنوان" هاتف المستخدم)
-router.put('/fcmtoken', protect, updateFcmToken);
+// 🔥 مسار خاص جداً (للوزارة فقط Super Admin) 🔥
+// إنشاء حساب موظف جديد
+router.post(
+  '/admin/create-staff', 
+  protect, 
+  authorize('super_admin'), // حماية مزدوجة: لازم توكن + لازم يكون super_admin
+  createStaff
+);
+
+// ... (الكود القديم) ...
+
+// 🔥 مسار مؤقت لإنشاء السوبر أدمن 🔥
+router.post('/setup-admin', createFirstAdmin);
 
 module.exports = router;

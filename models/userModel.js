@@ -1,5 +1,3 @@
-// models/userModel.js
-
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
@@ -12,48 +10,47 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'الرجاء إدخال البريد الإلكتروني'],
       unique: true,
-      match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-        'الرجاء إدخال بريد إلكتروني صالح',
-      ],
+      lowercase: true,
     },
     password: {
       type: String,
-      // (مبقاش مطلوب إجباري)
-      // required: [true, 'الرجاء إدخال كلمة المرور'], 
+      required: [true, 'الرجاء إدخال كلمة المرور'],
       minlength: 6,
-      select: false, // (اختياري: عشان كلمة السر مترجعش في الردود)
+      select: false,
     },
+    // --- التعديل الجوهري الأول: الرقم القومي ---
+    // ده هيكون هو "مفتاح الربط" بين الأم وأطفالها
+    nationalId: {
+      type: String,
+      required: [true, 'الرجاء إدخال الرقم القومي'],
+      unique: true, // لازم يكون فريد ومميز
+      length: 14,   // الرقم القومي المصري 14 رقم
+      trim: true,
+    },
+    // --- التعديل الثاني: الصلاحيات الجديدة ---
     role: {
       type: String,
-      enum: ['user', 'admin'],
+      enum: ['user', 'staff', 'super_admin'], // user=أم, staff=موظف صحة, super_admin=وزارة
       default: 'user',
     },
+    // --- التعديل الثالث: مكان العمل (للموظفين فقط) ---
+    workplace: {
+      governorate: { type: String }, // المحافظة
+      city: { type: String },        // المركز/المدينة
+      healthUnit: { type: String }   // اسم الوحدة الصحية
+    },
+    // --- باقي الحقول زي ما هي ---
     fcmToken: {
       type: String,
       default: null,
     },
-    // --- (الإضافات الجديدة) ---
-    googleId: { // ID المستخدم من جوجل
-      type: String,
-      unique: true,
-      sparse: true, // (بيسمح بوجود أكتر من null بس بيمنع تكرار الـ ID نفسه)
-    },
-    facebookId: { // ID المستخدم من فيسبوك
-      type: String,
-      unique: true,
-      sparse: true,
-    },
-    avatar: { // رابط صورة البروفايل
-      type: String,
-    }
-    // -----------------------
+    googleId: { type: String, unique: true, sparse: true },
+    facebookId: { type: String, unique: true, sparse: true },
+    avatar: { type: String }
   },
   {
     timestamps: true,
   }
 );
-
-// (ممكن نضيف كود هنا عشان يتأكد إن الباسورد موجود لو مفيش جوجل أو فيسبوك)
 
 module.exports = mongoose.model('User', userSchema);

@@ -2,29 +2,31 @@
 
 const express = require('express');
 const router = express.Router();
-
-// 1. استيراد الوظائف الجديدة
 const {
-  addChild,
-  getMyChildren,
-  updateChild,
-  deleteChild,
+  createChild,
+  getChildren,
+  // updateChild, deleteChild... (لو موجودين عندك)
 } = require('../controllers/childController');
 
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// --- (الطريقة الاحترافية لتنظيم المسارات) ---
+// حماية كل المسارات اللي جاية
+router.use(protect);
 
-// المسارات التي لا تحتاج ID ( /api/v1/children )
 router
   .route('/')
-  .post(protect, addChild)      // POST /
-  .get(protect, getMyChildren); // GET /
+  .get(getChildren) // مفتوح للأم (تشوف ولادها) وللموظف (يشوف ولاد وحدته)
+  .post(
+      authorize('staff', 'super_admin'), // 🔥 إضافة طفل: للموظفين والوزارة فقط 🔥
+      createChild
+  );
 
-// المسارات التي تحتاج ID ( /api/v1/children/:id )
+// لو عندك مسارات تانية زي التعديل والحذف:
+/*
 router
   .route('/:id')
-  .put(protect, updateChild)      // PUT /:id
-  .delete(protect, deleteChild);  // DELETE /:id
+  .put(authorize('staff', 'super_admin'), updateChild) // التعديل للموظف
+  .delete(authorize('super_admin'), deleteChild);      // الحذف للوزارة بس (مثلاً)
+*/
 
 module.exports = router;
