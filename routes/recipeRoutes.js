@@ -1,30 +1,23 @@
-// routes/recipeRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
-  createRecipe,
-  getAllRecipes,
+  getRecipes,
   getRecipeById,
+  createRecipe,
   updateRecipe,
   deleteRecipe,
 } = require('../controllers/recipeController');
 
-const { protect, admin } = require('../middleware/authMiddleware');
+// 🔥 التصحيح 🔥
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// --- (تنظيم المسارات) ---
+router.route('/')
+  .get(getRecipes)
+  .post(protect, authorize('super_admin'), createRecipe);
 
-// المسارات التي لا تحتاج ID ( /api/v1/recipes )
-router
-  .route('/')
-  .post(protect, admin, createRecipe) // للأدمن فقط
-  .get(getAllRecipes); // للجميع
-
-// المسارات التي تحتاج ID ( /api/v1/recipes/:id )
-router
-  .route('/:id')
-  .get(getRecipeById) // للجميع
-  .put(protect, admin, updateRecipe) // للأدمن فقط
-  .delete(protect, admin, deleteRecipe); // للأدمن فقط
+router.route('/:id')
+  .get(getRecipeById)
+  .put(protect, authorize('super_admin'), updateRecipe)
+  .delete(protect, authorize('super_admin'), deleteRecipe);
 
 module.exports = router;

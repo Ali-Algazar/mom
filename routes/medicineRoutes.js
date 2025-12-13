@@ -1,30 +1,23 @@
-// routes/medicineRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
-  createMedicine,
-  getAllMedicines,
+  getMedicines,
   getMedicineById,
+  createMedicine,
   updateMedicine,
   deleteMedicine,
 } = require('../controllers/medicineController');
 
-const { protect, admin } = require('../middleware/authMiddleware');
+// 🔥 التصحيح 🔥
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// --- (تنظيم المسارات) ---
+router.route('/')
+  .get(getMedicines) // الكل يشوف
+  .post(protect, authorize('super_admin'), createMedicine); // الوزارة تضيف
 
-// المسارات التي لا تحتاج ID ( /api/v1/medicines )
-router
-  .route('/')
-  .post(protect, admin, createMedicine) // للأدمن فقط
-  .get(getAllMedicines); // للجميع
-
-// المسارات التي تحتاج ID ( /api/v1/medicines/:id )
-router
-  .route('/:id')
-  .get(getMedicineById) // للجميع
-  .put(protect, admin, updateMedicine) // للأدمن فقط
-  .delete(protect, admin, deleteMedicine); // للأدمن فقط
+router.route('/:id')
+  .get(getMedicineById)
+  .put(protect, authorize('super_admin'), updateMedicine)
+  .delete(protect, authorize('super_admin'), deleteMedicine);
 
 module.exports = router;

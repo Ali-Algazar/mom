@@ -1,29 +1,23 @@
-// routes/vaccineRoutes.js
-
 const express = require('express');
 const router = express.Router();
-
-// 1. استيراد الوظائف الجديدة
 const {
-  createVaccine,
-  getAllVaccines,
+  getVaccines,
+  addVaccine,
   updateVaccine,
   deleteVaccine,
 } = require('../controllers/vaccineController');
-const { protect, admin } = require('../middleware/authMiddleware');
 
-// --- (تنظيم المسارات) ---
+// 🔥 التصحيح هنا: لازم نستخدم الأقواس {} لأننا بنستورد من ملف بيصدر أكتر من دالة
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// المسارات التي لا تحتاج ID ( /api/v1/vaccines )
 router
   .route('/')
-  .post(protect, admin, createVaccine) // (موجود من قبل - للأدمن)
-  .get(getAllVaccines); // (جديد - للجميع، لا يحتاج "protect")
+  .get(getVaccines) // عرض التطعيمات متاح للكل (ممكن تخليه protect لو عايز)
+  .post(protect, authorize('super_admin'), addVaccine); // الإضافة للوزارة بس
 
-// المسارات التي تحتاج ID ( /api/v1/vaccines/:id )
 router
   .route('/:id')
-  .put(protect, admin, updateVaccine)    // (جديد - للأدمن)
-  .delete(protect, admin, deleteVaccine); // (جديد - للأدمن)
+  .put(protect, authorize('super_admin'), updateVaccine) // التعديل للوزارة بس
+  .delete(protect, authorize('super_admin'), deleteVaccine); // الحذف للوزارة بس
 
 module.exports = router;

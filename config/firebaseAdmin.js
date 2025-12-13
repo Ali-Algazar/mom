@@ -1,36 +1,38 @@
-// config/firebaseAdmin.js
-
 const admin = require('firebase-admin');
 
-// --- (1. قراءة المفتاح من متغير البيئة) ---
 let serviceAccount;
-try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_STRING) {
-     // (تحويل النص من متغير البيئة обратно لـ JSON object)
-     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_STRING);
-  } else {
-     console.error('❌ [Config] Environment variable FIREBASE_SERVICE_ACCOUNT_JSON_STRING is not set!');
-     throw new Error('Firebase service account key configuration is missing.');
-  }
-} catch (error) {
-   console.error('❌ [Config] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON_STRING:', error.message);
-   throw new Error('Firebase service account key configuration is invalid.');
-}
-// ------------------------------------
 
 try {
-  // التحقق مما إذا كان قد تم تهيئته من قبل
+  // السيناريو 1: نحن على Vercel (نقرأ من متغير البيئة)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON_STRING) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_STRING);
+    console.log('✅ [Config] Loaded Firebase credentials from Environment Variable.');
+  } 
+  // السيناريو 2: نحن على الجهاز المحلي (نقرأ من الملف)
+  else {
+    // نحاول استيراد الملف المحلي
+    // (نستخدم try/catch عشان لو الملف مش موجود الكود مايضربش)
+    serviceAccount = require('./serviceAccountKey.json');
+    console.log('✅ [Config] Loaded Firebase credentials from local file.');
+  }
+} catch (error) {
+  console.error('⚠️ [Config Warning] Could not load Firebase credentials.');
+  console.error('Details:', error.message);
+}
+
+// تهيئة Firebase فقط إذا نجحنا في جلب المفاتيح
+if (serviceAccount) {
+  // نتأكد إنه لم يتم تهيئته مسبقاً
   if (!admin.apps.length) {
     admin.initializeApp({
-      // --- (2. استخدام الـ object اللي قرأناه) ---
       credential: admin.credential.cert(serviceAccount),
-      // ------------------------------------------
     });
-    console.log('✅ [Config] Firebase Admin Initialized from ENV variable');
+    console.log('🚀 Firebase Admin Initialized successfully.');
   }
-} catch (error) {
-  console.error('❌ [Config] Error initializing Firebase Admin:', error.message);
+} else {
+  console.warn('❌ [Config Error] Firebase service account key is missing! Notifications will NOT work.');
+  // لن نوقف السيرفر (process.exit) حتى لا يتوقف المشروع بالكامل، 
+  // لكن الإشعارات لن تعمل.
 }
 
-// تصدير كائن admin الرئيسي مباشرة
 module.exports = admin;

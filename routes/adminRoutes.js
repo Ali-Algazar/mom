@@ -1,25 +1,27 @@
-// routes/adminRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
-  getAllUsers,
-  getAllChildren,
-  getNotificationLogs,
-  // (قمنا بحذف sendCustomNotification)
+  getDashboardStats,
+  getDefaulters,
+  getVaccineNeedsForecast,
+  getAllUsers
 } = require('../controllers/adminController');
 
-const { protect, admin } = require('../middleware/authMiddleware');
+// 🔥 التصحيح 🔥
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// --- (مسارات إدارة المستخدمين والأطفال) ---
-router.get('/users', protect, admin, getAllUsers);
-router.get('/children', protect, admin, getAllChildren);
+router.use(protect); // كل اللي جاي محتاج تسجيل دخول
 
-// --- (مسارات إدارة الإشعارات) ---
-// (جلب سجلات الإرسال)
-router.get('/notifications/logs', protect, admin, getNotificationLogs);
+// إحصائيات عامة (للوزارة والموظفين)
+router.get('/stats', authorize('super_admin', 'staff'), getDashboardStats);
 
-// (قمنا بحذف مسار POST /notifications/broadcast)
+// تقرير المتخلفين (مهم جداً للموظف عشان يكلمهم)
+router.get('/defaulters', authorize('super_admin', 'staff'), getDefaulters);
 
+// تقرير توقعات المخزون (للوزارة والموظف)
+router.get('/forecast', authorize('super_admin', 'staff'), getVaccineNeedsForecast);
+
+// إدارة المستخدمين (للوزارة فقط)
+router.get('/users', authorize('super_admin'), getAllUsers);
 
 module.exports = router;

@@ -1,104 +1,65 @@
-// controllers/vaccineController.js
-
+const Vaccine = require('../models/vaccineModel');
 const asyncHandler = require('express-async-handler');
-const Vaccine = require('../models/vaccineModel'); // استيراد نموذج التطعيم
 
-/**
- * @desc    إضافة تطعيم جديد (للأدمن فقط)
- * @route   POST /api/v1/vaccines
- * @access  Private/Admin
- */
-const createVaccine = asyncHandler(async (req, res) => {
-  // 1. استلام البيانات من الـ body
-  const { name, description, ageInMonths, doseInfo } = req.body;
+// @desc    جلب كل التطعيمات الأساسية (Master List)
+// @route   GET /api/v1/vaccines
+// @access  Public (أو Private حسب رغبتك)
+const getVaccines = asyncHandler(async (req, res) => {
+  const vaccines = await Vaccine.find().sort({ ageInMonths: 1 }); // ترتيب حسب العمر
+  res.status(200).json(vaccines);
+});
 
-  // 2. التحقق
-  if (!name || !description || ageInMonths === undefined) {
-    res.status(400);
-    throw new Error('الرجاء إدخال الاسم، الوصف، وعمر التطعيم بالأشهر');
+// @desc    إضافة تطعيم جديد (للوزارة فقط)
+// @route   POST /api/v1/vaccines
+// @access  Private (Super Admin)
+const addVaccine = asyncHandler(async (req, res) => {
+  const { name, description, ageInMonths, mandatory } = req.body;
+
+  if (!name || ageInMonths === undefined) {
+    res.status(400); throw new Error('يرجى إضافة اسم التطعيم وعمر الاستحقاق');
   }
 
-  // 3. التحقق مما إذا كان التطعيم موجوداً من قبل
-  const vaccineExists = await Vaccine.findOne({ name });
-  if (vaccineExists) {
-    res.status(400);
-    throw new Error('هذا التطعيم مسجل مسبقاً');
-  }
-
-  // 4. إنشاء التطعيم
   const vaccine = await Vaccine.create({
     name,
     description,
     ageInMonths,
-    doseInfo,
+    mandatory: mandatory !== false // افتراضياً إجباري
   });
 
   res.status(201).json(vaccine);
 });
 
-/**
- * @desc    جلب جميع التطعيمات من القائمة الرئيسية
- * @route   GET /api/v1/vaccines
- * @access  Public (عام للجميع)
- */
-const getAllVaccines = asyncHandler(async (req, res) => {
-  // جلب كل التطعيمات وترتيبها حسب العمر (من الأصغر للأكبر)
-  const vaccines = await Vaccine.find({}).sort({ ageInMonths: 'asc' });
-  res.status(200).json(vaccines);
-});
-
-/**
- * @desc    تعديل تطعيم (للأدمن فقط)
- * @route   PUT /api/v1/vaccines/:id
- * @access  Private/Admin
- */
+// @desc    تعديل تطعيم
+// @route   PUT /api/v1/vaccines/:id
+// @access  Private (Super Admin)
 const updateVaccine = asyncHandler(async (req, res) => {
   const vaccine = await Vaccine.findById(req.params.id);
-
   if (!vaccine) {
-    res.status(440);
-    throw new Error('لم يتم العثور على التطعيم');
+    res.status(404); throw new Error('التطعيم غير موجود');
   }
 
-  // (req.body) هي البيانات الجديدة
-  const updatedVaccine = await Vaccine.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    {
-      new: true,
-      runValidators: true,
-    }
-  );
-
+  const updatedVaccine = await Vaccine.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+  });
   res.status(200).json(updatedVaccine);
 });
 
-/**
- * @desc    حذف تطعيم (للأدمن فقط)
- * @route   DELETE /api/v1/vaccines/:id
- * @access  Private/Admin
- */
+// @desc    حذف تطعيم
+// @route   DELETE /api/v1/vaccines/:id
+// @access  Private (Super Admin)
 const deleteVaccine = asyncHandler(async (req, res) => {
   const vaccine = await Vaccine.findById(req.params.id);
-
   if (!vaccine) {
-    res.status(404);
-    throw new Error('لم يتم العثور على التطعيم');
+    res.status(404); throw new Error('التطعيم غير موجود');
   }
-  
-  await Vaccine.findByIdAndDelete(req.params.id);
 
-  res.status(200).json({
-    success: true,
-    message: 'تم حذف التطعيم بنجاح',
-  });
+  await vaccine.deleteOne();
+  res.status(200).json({ message: 'تم حذف التطعيم بنجاح' });
 });
 
-
-// 4. تحديث سطر "module.exports"
 module.exports = {
-  createVaccine,
-  getAllVaccines, // <-- إضافة جديدة
-  updateVaccine,  // <-- إضافة جديدة
-  deleteVaccine,  // <-- إضافة جديدة
+  getVaccines,
+  addVaccine,
+  updateVaccine,
+  deleteVaccine,
 };

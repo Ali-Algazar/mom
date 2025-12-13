@@ -1,30 +1,19 @@
-// routes/soundRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
-  createSound,
-  getAllSounds,
-  getSoundById,
-  updateSound,
+  getSounds,
+  addSound,
   deleteSound,
 } = require('../controllers/soundController');
 
-const { protect, admin } = require('../middleware/authMiddleware');
+// 🔥 التصحيح 🔥
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// --- (تنظيم المسارات) ---
+router.route('/')
+  .get(getSounds)
+  .post(protect, authorize('super_admin'), addSound);
 
-// المسارات التي لا تحتاج ID ( /api/v1/sounds )
-router
-  .route('/')
-  .post(protect, admin, createSound) // للأدمن فقط
-  .get(getAllSounds); // للجميع
-
-// المسارات التي تحتاج ID ( /api/v1/sounds/:id )
-router
-  .route('/:id')
-  .get(getSoundById) // للجميع
-  .put(protect, admin, updateSound) // للأدمن فقط
-  .delete(protect, admin, deleteSound); // للأدمن فقط
+router.route('/:id')
+  .delete(protect, authorize('super_admin'), deleteSound);
 
 module.exports = router;

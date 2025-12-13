@@ -1,36 +1,25 @@
-// routes/faqRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
-  createFaq,
-  getAllFaqs,
+  getFaqs,
   searchFaqs,
-  getFaqById,
+  createFaq,
   updateFaq,
   deleteFaq,
 } = require('../controllers/faqController');
 
-const { protect, admin } = require('../middleware/authMiddleware');
+// 🔥 التصحيح 🔥
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// --- (تنظيم المسارات) ---
+router.route('/')
+  .get(getFaqs)
+  .post(protect, authorize('super_admin'), createFaq);
 
-// (للأدمن: إنشاء) - (للجميع: جلب الكل)
-router
-  .route('/')
-  .post(protect, admin, createFaq)
-  .get(getAllFaqs);
+// مسار البحث (مفتوح عشان الشات بوت)
+router.post('/search', searchFaqs);
 
-// (هام: يجب أن يكون مسار "search" قبل مسار ":id"
-//  حتى لا يعتبر "search" كـ ID)
-// (للبوت: البحث)
-router.get('/search', searchFaqs);
-
-// (للجميع: جلب واحد) - (للأدمن: تعديل وحذف)
-router
-  .route('/:id')
-  .get(getFaqById)
-  .put(protect, admin, updateFaq)
-  .delete(protect, admin, deleteFaq);
+router.route('/:id')
+  .put(protect, authorize('super_admin'), updateFaq)
+  .delete(protect, authorize('super_admin'), deleteFaq);
 
 module.exports = router;

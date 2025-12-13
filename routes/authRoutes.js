@@ -1,35 +1,64 @@
-// routes/authRoutes.js
-
 const express = require('express');
 const router = express.Router();
+
+// استيراد كل الدوال من الـ Controller
 const {
   registerUser,
   loginUser,
+  googleLogin,
+  facebookLogin,
   getMe,
-  createStaff, // <-- الدالة الجديدة
+  updateMe,
+  deleteMe,
+  updateFcmToken,
+  createStaff,      // دالة إنشاء الموظف
+  createFirstAdmin, // دالة إنشاء أول أدمن (المؤقتة)
 } = require('../controllers/authController');
 
+// استيراد الحماية
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// مسارات عامة (أي حد يقدر يدخلها)
-router.post('/register', registerUser); // تسجيل الأم
+// ===========================================
+// 1. المسارات العامة (Public) - مش محتاجة توكن
+// ===========================================
+
+// تسجيل دخول/حساب جديد للأم
+router.post('/register', registerUser);
 router.post('/login', loginUser);
 
-// مسارات خاصة (تحتاج توكن)
-router.get('/me', protect, getMe);
+// تسجيل دخول السوشيال
+router.post('/google', googleLogin);
+router.post('/facebook', facebookLogin);
 
-// 🔥 مسار خاص جداً (للوزارة فقط Super Admin) 🔥
+// 🔥 مسار مؤقت لإنشاء السوبر أدمن (امسحه لما تخلص) 🔥
+router.post('/setup-admin', createFirstAdmin);
+
+
+// ===========================================
+// 2. مسارات محمية (Private) - محتاجة توكن
+// ===========================================
+
+// (أي راوت تحت السطر ده هيتطلب توكن)
+router.use(protect);
+
+// بياناتي الشخصية (للأم أو الموظف)
+router.get('/me', getMe);
+router.put('/me', updateMe);
+router.delete('/me', deleteMe);
+
+// تحديث توكن الإشعارات
+router.put('/fcmtoken', updateFcmToken);
+
+
+// ===========================================
+// 3. مسارات الوزارة (Super Admin Only)
+// ===========================================
+
 // إنشاء حساب موظف جديد
 router.post(
-  '/admin/create-staff', 
-  protect, 
-  authorize('super_admin'), // حماية مزدوجة: لازم توكن + لازم يكون super_admin
+  '/admin/create-staff',
+  authorize('super_admin'), // حماية إضافية: لازم الرول يكون super_admin
   createStaff
 );
-
-// ... (الكود القديم) ...
-
-// 🔥 مسار مؤقت لإنشاء السوبر أدمن 🔥
-router.post('/setup-admin', createFirstAdmin);
 
 module.exports = router;
