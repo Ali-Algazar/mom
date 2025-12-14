@@ -1,32 +1,26 @@
-// routes/childRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
   createChild,
   getChildren,
-  // updateChild, deleteChild... (لو موجودين عندك)
+  getChildById,
+  updateChild,
+  deleteChild,
 } = require('../controllers/childController');
 
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// حماية كل المسارات اللي جاية
-router.use(protect);
+router.use(protect); // حماية للكل
 
 router
   .route('/')
-  .get(getChildren) // مفتوح للأم (تشوف ولادها) وللموظف (يشوف ولاد وحدته)
-  .post(
-      authorize('staff', 'super_admin'), // 🔥 إضافة طفل: للموظفين والوزارة فقط 🔥
-      createChild
-  );
+  .get(getChildren) // الكل يشوف (بشروطه)
+  .post(authorize('staff', 'super_admin'), createChild); // إضافة (موظف/وزارة)
 
-// لو عندك مسارات تانية زي التعديل والحذف:
-/*
 router
   .route('/:id')
-  .put(authorize('staff', 'super_admin'), updateChild) // التعديل للموظف
-  .delete(authorize('super_admin'), deleteChild);      // الحذف للوزارة بس (مثلاً)
-*/
+  .get(getChildById) // الكل يشوف تفاصيل (بشروطه)
+  .put(authorize('staff', 'super_admin'), updateChild) // تعديل (موظف/وزارة)
+  .delete(authorize('super_admin'), deleteChild); // حذف (وزارة فقط)
 
 module.exports = router;
