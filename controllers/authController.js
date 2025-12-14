@@ -20,13 +20,14 @@ const generateTokenAndRespond = (res, user) => {
     name: user.name,
     email: user.email,
     role: user.role,
-    workplace: user.workplace, // هيرجع الكائن كامل لو عملنا populate
+    workplace: user.workplace,
     avatar: user.avatar,
+    fcmToken: user.fcmToken, // بنرجعه عشان نتأكد
     token: token,
   });
 };
 
-// --- 1. تسجيل مستخدم جديد (للأمهات) ---
+// --- 1. تسجيل مستخدم جديد ---
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, nationalId } = req.body;
 
@@ -43,19 +44,11 @@ const registerUser = asyncHandler(async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, salt);
 
   const user = await User.create({
-    name,
-    email,
-    password: hashedPassword,
-    nationalId,
-    role: 'user'
+    name, email, password: hashedPassword, nationalId, role: 'user'
   });
 
   if (user) {
-    // الربط التلقائي بالأطفال
-    await Child.updateMany(
-      { motherNationalId: nationalId },
-      { parentUser: user._id }
-    );
+    await Child.updateMany({ motherNationalId: nationalId }, { parentUser: user._id });
     generateTokenAndRespond(res, user);
   } else {
     res.status(400); throw new Error('بيانات غير صحيحة');
@@ -64,18 +57,20 @@ const registerUser = asyncHandler(async (req, res) => {
 
 // --- 2. تسجيل الدخول ---
 const loginUser = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, fcmToken } = req.body; // ممكن الموبايل يبعت التوكن مع اللوجين
 
   if (!email || !password) {
     res.status(400); throw new Error('الرجاء إدخال البريد وكلمة المرور');
   }
 
-  // بنعمل populate عشان لو موظف، بيانات الوحدة (الاسم والمحافظة) تيجي معاه في الرد
-  const user = await User.findOne({ email })
-    .select('+password')
-    .populate('workplace');
+  const user = await User.findOne({ email }).select('+password').populate('workplace');
 
   if (user && (await bcrypt.compare(password, user.password))) {
+    // لو باعت توكن جديد مع اللوجين، نحدثه بالمرة
+    if (fcmToken) {
+        user.fcmToken = fcmToken;
+        await user.save();
+    }
     generateTokenAndRespond(res, user);
   } else {
     res.status(401); throw new Error('بيانات الدخول غير صحيحة');
@@ -84,13 +79,11 @@ const loginUser = asyncHandler(async (req, res) => {
 
 // --- 3. تسجيل الدخول بجوجل ---
 const googleLogin = asyncHandler(async (req, res) => {
-  const { idToken } = req.body;
-
+  const { idToken, fcmToken } = req.body;
   if (!idToken) { res.status(400); throw new Error('Google ID Token مطلوب'); }
 
   const ticket = await client.verifyIdToken({
-      idToken: idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      idToken: idToken, audience: process.env.GOOGLE_CLIENT_ID,
   });
   const { name, email, picture, sub: googleId } = ticket.getPayload();
 
@@ -100,16 +93,14 @@ const googleLogin = asyncHandler(async (req, res) => {
     if (!user.googleId) {
       user.googleId = googleId;
       user.avatar = user.avatar || picture;
-      await user.save();
     }
+    if (fcmToken) user.fcmToken = fcmToken; // تحديث التوكن
+    await user.save();
     generateTokenAndRespond(res, user);
   } else {
-    // مستخدم جديد بجوجل (رقم قومي مؤقت)
     const randomNationalId = "TEMP" + Date.now(); 
     const newUser = await User.create({
-      googleId, name, email, avatar: picture,
-      nationalId: randomNationalId,
-      role: 'user'
+      googleId, name, email, avatar: picture, nationalId: randomNationalId, role: 'user', fcmToken
     });
     generateTokenAndRespond(res, newUser);
   }
@@ -117,7 +108,7 @@ const googleLogin = asyncHandler(async (req, res) => {
 
 // --- 4. تسجيل الدخول بفيسبوك ---
 const facebookLogin = asyncHandler(async (req, res) => {
-    const { accessToken } = req.body;
+    const { accessToken, fcmToken } = req.body;
     if (!accessToken) { res.status(400); throw new Error('Facebook Access Token مطلوب'); }
 
     const url = `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${accessToken}`;
@@ -132,33 +123,27 @@ const facebookLogin = asyncHandler(async (req, res) => {
         if (!user.facebookId) {
             user.facebookId = facebookId;
             user.avatar = user.avatar || picture.data.url;
-            await user.save();
         }
+        if (fcmToken) user.fcmToken = fcmToken;
+        await user.save();
         generateTokenAndRespond(res, user);
     } else {
         const randomNationalId = "TEMP" + Date.now();
         const newUser = await User.create({
-            facebookId, name, email, avatar: picture.data.url,
-            nationalId: randomNationalId,
-            role: 'user'
+            facebookId, name, email, avatar: picture.data.url, nationalId: randomNationalId, role: 'user', fcmToken
         });
         generateTokenAndRespond(res, newUser);
     }
 });
 
-// --- 5. إنشاء حساب موظف (مربوط بوحدة صحية) ---
+// --- 5. إنشاء حساب موظف ---
 const createStaff = asyncHandler(async (req, res) => {
   const { name, email, password, nationalId, healthUnitId } = req.body;
 
-  if (!healthUnitId) {
-    res.status(400); throw new Error('يجب اختيار الوحدة الصحية (healthUnitId)');
-  }
+  if (!healthUnitId) { res.status(400); throw new Error('يجب اختيار الوحدة الصحية'); }
 
-  // التأكد من أن الوحدة موجودة
   const unitExists = await HealthUnit.findById(healthUnitId);
-  if (!unitExists) {
-    res.status(404); throw new Error('الوحدة الصحية المختارة غير موجودة');
-  }
+  if (!unitExists) { res.status(404); throw new Error('الوحدة الصحية غير موجودة'); }
 
   const staffExists = await User.findOne({ email });
   if (staffExists) { res.status(400); throw new Error('الموظف مسجل بالفعل'); }
@@ -167,33 +152,22 @@ const createStaff = asyncHandler(async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, salt);
 
   const staff = await User.create({
-    name,
-    email,
-    password: hashedPassword,
-    nationalId,
-    role: 'staff',
-    workplace: healthUnitId // تخزين الـ ID فقط
+    name, email, password: hashedPassword, nationalId, role: 'staff', workplace: healthUnitId
   });
 
   if (staff) {
     res.status(201).json({
-      _id: staff._id,
-      name: staff.name,
-      role: staff.role,
-      workplace: unitExists // إرجاع بيانات الوحدة للتأكيد
+      _id: staff._id, name: staff.name, role: staff.role, workplace: unitExists
     });
   } else {
     res.status(400); throw new Error('فشل إنشاء حساب الموظف');
   }
 });
 
-// --- 6. إنشاء أول أدمن (مؤقت) ---
+// --- 6. إنشاء أول أدمن ---
 const createFirstAdmin = asyncHandler(async (req, res) => {
   const { name, email, password, nationalId, secretKey } = req.body;
-
-  if (secretKey !== 'admin-setup-123') {
-    res.status(403); throw new Error('مفتاح الأمان غير صحيح');
-  }
+  if (secretKey !== 'admin-setup-123') { res.status(403); throw new Error('مفتاح الأمان غير صحيح'); }
 
   const userExists = await User.findOne({ email });
   if (userExists) { res.status(400); throw new Error('الأدمن موجود بالفعل'); }
@@ -202,13 +176,12 @@ const createFirstAdmin = asyncHandler(async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, salt);
 
   const admin = await User.create({
-    name, email, password: hashedPassword, nationalId,
-    role: 'super_admin'
+    name, email, password: hashedPassword, nationalId, role: 'super_admin'
   });
 
   if (admin) {
     res.status(201).json({
-      _id: admin._id, name: admin.name, email: admin.email, role: admin.role,
+      _id: admin._id, name: admin.name, role: admin.role,
       token: jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: '30d' })
     });
   } else {
@@ -216,13 +189,29 @@ const createFirstAdmin = asyncHandler(async (req, res) => {
   }
 });
 
-// --- دوال أخرى ---
-const getMe = asyncHandler(async (req, res) => { res.status(200).json(req.user); });
-const updateMe = asyncHandler(async (req, res) => { res.status(200).json({ msg: "Update logic" }); });
-const deleteMe = asyncHandler(async (req, res) => { res.status(200).json({ msg: "Delete logic" }); });
-const updateFcmToken = asyncHandler(async (req, res) => { res.status(200).json({ msg: "FCM logic" }); });
+// --- 7. 🔥 تحديث FCM Token (جديد) 🔥 ---
+const updateFcmToken = asyncHandler(async (req, res) => {
+  const { fcmToken } = req.body;
 
-// 🔥 التصدير الكامل (مهم جداً عشان الراوت يشوف الدوال) 🔥
+  if (!fcmToken) {
+    res.status(400); throw new Error('FCM Token مطلوب');
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { fcmToken: fcmToken },
+    { new: true }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: 'تم تحديث توكن الإشعارات',
+    fcmToken: user.fcmToken
+  });
+});
+
+const getMe = asyncHandler(async (req, res) => { res.status(200).json(req.user); });
+
 module.exports = {
   registerUser,
   loginUser,
@@ -230,8 +219,6 @@ module.exports = {
   facebookLogin,
   createStaff,
   createFirstAdmin,
+  updateFcmToken, // <-- تم التصدير
   getMe,
-  updateMe,
-  deleteMe,
-  updateFcmToken
 };

@@ -1,64 +1,30 @@
 const express = require('express');
 const router = express.Router();
-
-// استيراد كل الدوال من الـ Controller
 const {
   registerUser,
   loginUser,
+  getMe,
   googleLogin,
   facebookLogin,
-  getMe,
-  updateMe,
-  deleteMe,
-  updateFcmToken,
-  createStaff,      // دالة إنشاء الموظف
-  createFirstAdmin, // دالة إنشاء أول أدمن (المؤقتة)
+  createStaff,
+  createFirstAdmin,
+  updateFcmToken // <-- استيراد الدالة الجديدة
 } = require('../controllers/authController');
 
-// استيراد الحماية
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// ===========================================
-// 1. المسارات العامة (Public) - مش محتاجة توكن
-// ===========================================
-
-// تسجيل دخول/حساب جديد للأم
+// مسارات عامة
 router.post('/register', registerUser);
 router.post('/login', loginUser);
-
-// تسجيل دخول السوشيال
 router.post('/google', googleLogin);
 router.post('/facebook', facebookLogin);
-
-// 🔥 مسار مؤقت لإنشاء السوبر أدمن (امسحه لما تخلص) 🔥
 router.post('/setup-admin', createFirstAdmin);
 
+// مسارات محمية
+router.get('/me', protect, getMe);
+router.put('/fcm-token', protect, updateFcmToken); // 🔥 الرابط الجديد
 
-// ===========================================
-// 2. مسارات محمية (Private) - محتاجة توكن
-// ===========================================
-
-// (أي راوت تحت السطر ده هيتطلب توكن)
-router.use(protect);
-
-// بياناتي الشخصية (للأم أو الموظف)
-router.get('/me', getMe);
-router.put('/me', updateMe);
-router.delete('/me', deleteMe);
-
-// تحديث توكن الإشعارات
-router.put('/fcmtoken', updateFcmToken);
-
-
-// ===========================================
-// 3. مسارات الوزارة (Super Admin Only)
-// ===========================================
-
-// إنشاء حساب موظف جديد
-router.post(
-  '/admin/create-staff',
-  authorize('super_admin'), // حماية إضافية: لازم الرول يكون super_admin
-  createStaff
-);
+// مسارات الأدمن
+router.post('/admin/create-staff', protect, authorize('super_admin'), createStaff);
 
 module.exports = router;
