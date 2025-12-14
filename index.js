@@ -25,11 +25,11 @@ app.use(cors());
 app.use(helmet());
 
 // --- استيراد المسارات ---
+
 const mainRoutes = require('./routes/mainRoutes');
 const authRoutes = require('./routes/authRoutes');
 const childRoutes = require('./routes/childRoutes');
 const vaccineRoutes = require('./routes/vaccineRoutes');
-const scheduleRoutes = require('./routes/scheduleRoutes');
 const articleRoutes = require('./routes/articleRoutes');
 const growthRoutes = require('./routes/growthRoutes');
 const dailyLogRoutes = require('./routes/dailyLogRoutes');
@@ -47,12 +47,12 @@ const locationRoutes = require('./routes/locationRoutes');
 
 
 // --- تركيب المسارات ---
+app.use('/api/v1/records', require('./routes/recordRoutes'));
 app.use('/api/v1/locations', locationRoutes);
 app.use('/', mainRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/children', childRoutes);
 app.use('/api/v1/vaccines', vaccineRoutes);
-app.use('/api/v1/schedule', scheduleRoutes);
 app.use('/api/v1/articles', articleRoutes);
 app.use('/api/v1/growth', growthRoutes);
 app.use('/api/v1/logs', dailyLogRoutes);
