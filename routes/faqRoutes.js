@@ -8,18 +8,19 @@ const {
   deleteFaq,
 } = require('../controllers/faqController');
 
-// 🔥 التصحيح 🔥
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-router.route('/')
-  .get(getFaqs)
-  .post(protect, authorize('super_admin'), createFaq);
-
-// مسار البحث (مفتوح عشان الشات بوت)
+// البحث متاح للكل
 router.post('/search', searchFaqs);
+router.get('/', getFaqs); // عرض الأسئلة متاح للكل (أو ممكن تخليه محمي)
+
+// باقي العمليات (إضافة/تعديل/حذف) للوزارة والموظفين فقط
+router.use(protect); // تفعيل الحماية لكل اللي جاي
+
+router.post('/', authorize('super_admin', 'staff'), createFaq);
 
 router.route('/:id')
-  .put(protect, authorize('super_admin'), updateFaq)
-  .delete(protect, authorize('super_admin'), deleteFaq);
+  .put(authorize('super_admin'), updateFaq)
+  .delete(authorize('super_admin'), deleteFaq);
 
 module.exports = router;
