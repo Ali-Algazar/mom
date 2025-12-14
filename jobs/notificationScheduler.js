@@ -1,98 +1,118 @@
-// jobs/notificationScheduler.js
-
 const { addDays, startOfDay, endOfDay } = require('date-fns');
 const ChildVaccination = require('../models/childVaccinationModel');
-const admin = require('../config/firebaseAdmin'); // استيراد admin
+const admin = require('../config/firebaseAdmin');
 const NotificationLog = require('../models/notificationLogModel');
 const mongoose = require('mongoose');
 
-// --- (دي بقت مجرد وظيفة عادية بيتم استدعائها) ---
 const sendVaccinationReminders = async () => {
-  console.log('--- [Manual Trigger / Vercel Cron]: بدء مهمة الإشعارات ---');
+  console.log('--- 🔔 بدء مهمة إرسال الإشعارات ---');
 
+  // 1. التحقق من اتصال Firebase
   let messagingService;
   try {
       if (admin && admin.messaging) {
           messagingService = admin.messaging();
       }
   } catch (initError) {
-       console.error('[Scheduler] خطأ في الحصول على خدمة المراسلة:', initError);
+       console.error('❌ خطأ في تهيئة Firebase:', initError);
+       return { success: false, message: 'Firebase Error' };
   }
 
   if (!messagingService) {
-      console.error('--- [Manual Trigger / Vercel Cron]: خدمة مراسلة Firebase غير متاحة! إلغاء المهمة. ---');
-      return { success: false, message: 'خدمة المراسلة غير متاحة' }; // إرجاع الحالة
+      console.error('❌ خدمة المراسلة غير متاحة.');
+      return { success: false, message: 'Messaging service unavailable' };
   }
 
-  if (mongoose.connection.readyState !== 1) {
-    console.error('--- [Manual Trigger / Vercel Cron]: قاعدة البيانات غير متصلة! إلغاء المهمة. ---');
-    return { success: false, message: 'قاعدة البيانات غير متاحة' }; // إرجاع الحالة
-  }
-
+  // 2. تحديد التاريخ المستهدف (بعد 3 أيام من الآن)
   const targetDate = addDays(new Date(), 3);
   const targetStart = startOfDay(targetDate);
   const targetEnd = endOfDay(targetDate);
+
   let successCount = 0;
   let failureCount = 0;
   let noTokenCount = 0;
 
   try {
+    // 3. البحث عن التطعيمات المستحقة
     const upcomingVaccinations = await ChildVaccination.find({
       dueDate: { $gte: targetStart, $lte: targetEnd },
       status: 'pending',
     })
-      .populate('parent', 'fcmToken name _id')
-      .populate('child', 'name')
-      .populate('vaccine', 'name');
+      // 🔥 التعديل هنا: Populate متداخل عشان نجيب الأم من خلال الطفل 🔥
+      .populate({
+          path: 'child',
+          select: 'name parentUser', // هات اسم الطفل والـ ID بتاع الأم
+          populate: {
+              path: 'parentUser', // ادخل جوا الأم
+              select: 'name fcmToken' // وهات اسمها والتوكن
+          }
+      })
+      .populate('vaccine', 'name'); // هات اسم التطعيم
 
     if (!upcomingVaccinations || upcomingVaccinations.length === 0) {
-      console.log('--- [Manual Trigger / Vercel Cron]: لا توجد تطعيمات قادمة. ---');
-      return { success: true, message: 'لا توجد إشعارات لإرسالها اليوم.' }; // إرجاع الحالة
+      console.log('ℹ️ لا توجد تطعيمات مستحقة بعد 3 أيام.');
+      return { success: true, message: 'No vaccinations found' };
     }
-    console.log(`--- [Manual Trigger / Vercel Cron]: تم العثور على ${upcomingVaccinations.length} تطعيم قادم ---`);
 
+    console.log(`📊 تم العثور على ${upcomingVaccinations.length} تطعيم مستحق.`);
+
+    // 4. إرسال الإشعارات
     for (const job of upcomingVaccinations) {
-      if (job.parent && job.parent.fcmToken) {
+      // الوصول للأم اختلف: بقى عن طريق job.child.parentUser
+      const parent = job.child ? job.child.parentUser : null;
+
+      if (parent && parent.fcmToken) {
         const message = {
           notification: {
-            title: 'تذكير بموعد تطعيم 💉',
-            body: `مرحباً ${job.parent.name}، هذا تذكير بأن موعد تطعيم "${job.vaccine.name}" لطفلك "${job.child.name}" بعد 3 أيام.`,
+            title: 'تذكير بموعد التطعيم 💉',
+            body: `مرحباً ${parent.name}، تذكير بموعد تطعيم "${job.vaccineName || job.vaccine.name}" للطفل "${job.child.name}" بعد 3 أيام.`,
           },
-          token: job.parent.fcmToken,
+          token: parent.fcmToken,
         };
 
         try {
           await messagingService.send(message);
-          console.log(`✅ تم إرسال الإشعار بنجاح إلى ${job.parent.name}`);
+          console.log(`✅ تم الإرسال إلى: ${parent.name}`);
           successCount++;
+          
+          // تسجيل في اللوج
           await NotificationLog.create({
-            user: job.parent._id, status: 'success', notificationTitle: message.notification.title, notificationBody: message.notification.body,
+            user: parent._id,
+            status: 'success',
+            notificationTitle: message.notification.title,
+            notificationBody: message.notification.body,
           });
+
         } catch (error) {
-          console.error(`❌ فشل إرسال الإشعار إلى ${job.parent.name}:`, error.message);
+          console.error(`❌ فشل الإرسال إلى ${parent.name}:`, error.message);
           failureCount++;
+          
           await NotificationLog.create({
-            user: job.parent._id, status: 'failed', errorMessage: error.message, notificationTitle: message.notification.title, notificationBody: message.notification.body,
+            user: parent._id,
+            status: 'failed',
+            errorMessage: error.message,
+            notificationTitle: message.notification.title,
+            notificationBody: message.notification.body,
           });
         }
       } else {
-         if(job.parent) {
-             noTokenCount++;
-             await NotificationLog.create({
-                 user: job.parent._id, status: 'failed', errorMessage: 'User does not have an FCM token registered.', notificationTitle: 'تذكير بموعد تطعيم 💉', notificationBody: `تذكير بتطعيم "${job.vaccine.name}" لطفلك "${job.child.name}"`,
-             });
+         noTokenCount++;
+         // لو الأم ملهاش توكن، ممكن نسجل ده عشان نعرف إنها مش هتستلم إشعار
+         if(parent) {
+             console.log(`⚠️ المستخدم ${parent.name} ليس لديه FCM Token.`);
          }
       }
     }
-     return { success: true, message: `انتهت المهمة. نجاح: ${successCount}, فشل: ${failureCount}, بدون توكن: ${noTokenCount}` }; // إرجاع الحالة
+
+    return { 
+        success: true, 
+        message: `التقرير: نجاح (${successCount}) - فشل (${failureCount}) - بدون توكن (${noTokenCount})` 
+    };
 
   } catch (error) {
-    console.error('--- [Manual Trigger / Vercel Cron]: خطأ فادح في مهمة الإشعارات ---', error);
-     return { success: false, message: `خطأ فادح: ${error.message}` }; // إرجاع الحالة
+    console.error('❌ خطأ فادح في السكيدولر:', error);
+    return { success: false, message: error.message };
   }
 };
 
-// --- (تم حذف cron.schedule) ---
-
-// --- تصدير الوظيفة عشان الـ API يقدر ينادي عليها ---
 module.exports = { sendVaccinationReminders };

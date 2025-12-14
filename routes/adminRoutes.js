@@ -4,10 +4,10 @@ const {
   getDashboardStats,
   getDefaulters,
   getVaccineNeedsForecast,
-  getAllUsers
+  getAllUsers,
+  triggerNotifications // <-- استيراد الدالة الجديدة
 } = require('../controllers/adminController');
 
-// 🔥 التصحيح 🔥
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.use(protect); // كل اللي جاي محتاج تسجيل دخول
@@ -23,5 +23,8 @@ router.get('/forecast', authorize('super_admin', 'staff'), getVaccineNeedsForeca
 
 // إدارة المستخدمين (للوزارة فقط)
 router.get('/users', authorize('super_admin'), getAllUsers);
+
+// رابط لتجربة الإشعارات يدوياً (للوزارة فقط)
+router.post('/trigger-notifications', authorize('super_admin'), triggerNotifications);
 
 module.exports = router;

@@ -2,6 +2,7 @@ const User = require('../models/userModel');
 const Child = require('../models/childModel');
 const ChildVaccination = require('../models/childVaccinationModel');
 const asyncHandler = require('express-async-handler');
+const { sendVaccinationReminders } = require('../jobs/notificationScheduler'); // استيراد دالة الإشعارات
 
 // @desc    إحصائيات عامة (للوحة التحكم)
 const getDashboardStats = asyncHandler(async (req, res) => {
@@ -19,23 +20,20 @@ const getDashboardStats = asyncHandler(async (req, res) => {
 // @desc    قائمة المتخلفين عن التطعيم (أكثر من 14 يوم)
 // @route   GET /api/v1/admin/defaulters
 const getDefaulters = asyncHandler(async (req, res) => {
-    // 1. تحديد التاريخ (من أسبوعين فاتوا)
     const today = new Date();
     const deadline = new Date(today);
     deadline.setDate(today.getDate() - 14);
 
-    // 2. البحث عن التطعيمات المتأخرة
     const overdueRecords = await ChildVaccination.find({
         status: 'pending',
         dueDate: { $lte: deadline }
     })
-    .populate('child', 'name nationalId motherNationalId') // هات بيانات الطفل
+    .populate('child', 'name nationalId motherNationalId')
     .populate({
         path: 'child',
-        populate: { path: 'parentUser', select: 'name email phone' } // هات بيانات الأم للتواصل
+        populate: { path: 'parentUser', select: 'name email phone' }
     });
 
-    // 3. (اختياري) فلترة حسب وحدة الموظف لو اللي طالب موظف
     let results = overdueRecords;
     if (req.user.role === 'staff') {
         results = overdueRecords.filter(record => 
@@ -54,7 +52,6 @@ const getDefaulters = asyncHandler(async (req, res) => {
 // @desc    توقع احتياجات التطعيمات (للشهر القادم)
 // @route   GET /api/v1/admin/forecast
 const getVaccineNeedsForecast = asyncHandler(async (req, res) => {
-    // نفترض بنحسب للشهر الجاي
     const today = new Date();
     const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     const endNextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
@@ -86,9 +83,22 @@ const getAllUsers = asyncHandler(async (req, res) => {
     res.status(200).json(users);
 });
 
+// @desc    تشغيل الإشعارات يدوياً (للاختبار)
+// @route   POST /api/v1/admin/trigger-notifications
+const triggerNotifications = asyncHandler(async (req, res) => {
+    const result = await sendVaccinationReminders();
+    
+    if (result.success) {
+        res.status(200).json(result);
+    } else {
+        res.status(500).json(result);
+    }
+});
+
 module.exports = {
     getDashboardStats,
     getDefaulters,
     getVaccineNeedsForecast,
-    getAllUsers
+    getAllUsers,
+    triggerNotifications // <-- تمت إضافتها للتصدير
 };
