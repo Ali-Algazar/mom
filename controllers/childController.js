@@ -7,10 +7,9 @@ const Vaccine = require('../models/vaccineModel');
 const asyncHandler = require('express-async-handler');
 
 // --- دالة مساعدة (Helper Function) لجدولة التطعيمات ---
-// دي الوظيفة اللي بتشتغل في الخلفية لما نضيف طفل جديد
+// بتشتغل أوتوماتيك لما نضيف طفل جديد
 const scheduleVaccinesForChild = async (child) => {
   try {
-    // 1. نجيب كل التطعيمات الأساسية من السيستم
     const allVaccines = await Vaccine.find({});
 
     if (allVaccines.length === 0) {
@@ -18,7 +17,6 @@ const scheduleVaccinesForChild = async (child) => {
       return;
     }
 
-    // 2. نجهز قائمة التطعيمات للطفل ده
     const vaccinationRecords = allVaccines.map((vaccine) => {
       // حساب تاريخ الاستحقاق: تاريخ الميلاد + عدد الشهور
       const dueDate = new Date(child.dateOfBirth);
@@ -27,19 +25,17 @@ const scheduleVaccinesForChild = async (child) => {
       return {
         child: child._id,
         vaccine: vaccine._id,
-        vaccineName: vaccine.name, // للتسهيل في العرض
+        vaccineName: vaccine.name,
         dueDate: dueDate,
-        status: 'pending', // الحالة الافتراضية
+        status: 'pending',
       };
     });
 
-    // 3. حفظ الكل في قاعدة البيانات مرة واحدة (Bulk Insert)
     await ChildVaccination.insertMany(vaccinationRecords);
     console.log(`✅ تم جدولة ${vaccinationRecords.length} تطعيم للطفل ${child.name}`);
 
   } catch (error) {
     console.error('❌ خطأ أثناء جدولة التطعيمات:', error);
-    // مش هنوقف العملية، بس هنسجل الخطأ
   }
 };
 
@@ -50,7 +46,7 @@ const scheduleVaccinesForChild = async (child) => {
  * @access  Private (Staff/Admin)
  */
 const createChild = asyncHandler(async (req, res) => {
-  // 1. التحقق إن المستخدم موظف أو أدمن (مش أم)
+  // 1. التحقق إن المستخدم موظف أو أدمن
   if (req.user.role !== 'staff' && req.user.role !== 'super_admin') {
     res.status(403);
     throw new Error('غير مصرح لك بتسجيل مواليد. هذه وظيفة الموظف المختص.');
@@ -71,31 +67,32 @@ const createChild = asyncHandler(async (req, res) => {
     throw new Error('هذا الطفل مسجل بالفعل (الرقم القومي مكرر)');
   }
 
-  // 4. البحث عن حساب الأم (لربطها فوراً لو كانت مسجلة)
+  // 4. البحث عن حساب الأم لربطها فوراً لو موجودة
   const motherUser = await User.findOne({ nationalId: motherNationalId });
 
-  // 5. إنشاء الطفل
+  // 5. إنشاء الطفل مع وراثة مكان التسجيل من الموظف
+  // (لو السوبر أدمن هو اللي بيضيف، لازم نتاكد ان عنده workplace او نخليه يدخله يدوي، 
+  // بس هنفترض هنا ان السوبر أدمن ليه مكان او الموظف هو الاساس)
+  const workplace = req.user.workplace || { governorate: 'General', city: 'General', healthUnit: 'Ministry' };
+
   const child = await Child.create({
     name,
     nationalId,
     dateOfBirth,
     gender,
     motherNationalId,
-    // الربط بالأم (لو موجودة)
     parentUser: motherUser ? motherUser._id : null,
-    // وراثة مكان التسجيل من الموظف
     registeredAt: {
-      governorate: req.user.workplace.governorate,
-      city: req.user.workplace.city,
-      healthUnit: req.user.workplace.healthUnit
+      governorate: workplace.governorate,
+      city: workplace.city,
+      healthUnit: workplace.healthUnit
     },
     createdBy: req.user._id
   });
 
   if (child) {
-    // 🔥 تشغيل الجدولة التلقائية هنا 🔥
+    // تشغيل الجدولة التلقائية
     await scheduleVaccinesForChild(child);
-
     res.status(201).json(child);
   } else {
     res.status(400);
@@ -104,38 +101,59 @@ const createChild = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    جلب الأطفال (ذكي: للأم أو للموظف)
- * @route   GET /api/v1/children
+ * @desc    جلب الأطفال (ذكي: للأم، للموظف، وللوزارة مع فلترة)
+ * @route   GET /api/v1/children?governorate=...&city=...
  * @access  Private
  */
 const getChildren = asyncHandler(async (req, res) => {
   let query = {};
 
+  // 1️⃣ سيناريو الأم (User): تشوف ولادها بس
   if (req.user.role === 'user') {
-    // السيناريو 1: الأم بتطلب -> هات أطفالها هي بس
     query = { parentUser: req.user._id };
   } 
+  
+  // 2️⃣ سيناريو الموظف (Staff): يشوف أطفال وحدته الصحية بس
   else if (req.user.role === 'staff') {
-    // السيناريو 2: الموظف بيطلب -> هات أطفال وحدته الصحية بس
-    // بنجيب الأطفال اللي RegisteredAt بتاعهم مطابق لبيانات الموظف
     if (!req.user.workplace) {
-        res.status(400); throw new Error('بيانات الموظف غير مكتملة (لا يوجد مكان عمل)');
+        res.status(400); throw new Error('بيانات الموظف غير مكتملة');
     }
     query = { 
       'registeredAt.healthUnit': req.user.workplace.healthUnit,
       'registeredAt.city': req.user.workplace.city
     };
   }
+  
+  // 3️⃣ سيناريو الوزارة (Super Admin): يشوف كله + فلترة
   else if (req.user.role === 'super_admin') {
-    // السيناريو 3: الوزارة -> هات كله
-    query = {};
+    query = {}; // الأساس هات كله
+
+    // فلتر بالمحافظة
+    if (req.query.governorate) {
+      query['registeredAt.governorate'] = req.query.governorate;
+    }
+    // فلتر بالمدينة
+    if (req.query.city) {
+      query['registeredAt.city'] = req.query.city;
+    }
+    // فلتر بالوحدة الصحية
+    if (req.query.healthUnit) {
+      query['registeredAt.healthUnit'] = req.query.healthUnit;
+    }
+    // بحث بالرقم القومي للطفل
+    if (req.query.nationalId) {
+      query['nationalId'] = req.query.nationalId;
+    }
   }
 
   const children = await Child.find(query).sort({ createdAt: -1 });
-  res.status(200).json(children);
+
+  res.status(200).json({
+    count: children.length,
+    data: children
+  });
 });
 
-// تصدير الدوال
 module.exports = {
   createChild,
   getChildren,
