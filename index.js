@@ -7,6 +7,7 @@ const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const cors = require('cors');
 const helmet = require('helmet');
 
+
 dotenv.config();
 connectDB(); // الاتصال بقاعدة البيانات
 require('./config/firebaseAdmin'); // تهيئة Firebase Admin (مهم!)
@@ -17,6 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- Middlewares ---
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
@@ -40,9 +42,12 @@ const recipeRoutes = require('./routes/recipeRoutes');
 const soundRoutes = require('./routes/soundRoutes');
 const postRoutes = require('./routes/postRoutes');
 const commentRoutes = require('./routes/commentRoutes');
-const cronRoutes = require('./routes/cronRoutes'); // <-- (1. استيراد المسار الجديد)
+const cronRoutes = require('./routes/cronRoutes'); 
+const locationRoutes = require('./routes/locationRoutes'); 
+
 
 // --- تركيب المسارات ---
+app.use('/api/v1/locations', locationRoutes);
 app.use('/', mainRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/children', childRoutes);

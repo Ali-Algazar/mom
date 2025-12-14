@@ -1,160 +1,104 @@
-// controllers/childController.js
-
 const Child = require('../models/childModel');
 const User = require('../models/userModel');
 const ChildVaccination = require('../models/childVaccinationModel');
 const Vaccine = require('../models/vaccineModel');
 const asyncHandler = require('express-async-handler');
 
-// --- دالة مساعدة (Helper Function) لجدولة التطعيمات ---
-// بتشتغل أوتوماتيك لما نضيف طفل جديد
+// ... (دالة scheduleVaccinesForChild زي ما هي) ...
 const scheduleVaccinesForChild = async (child) => {
-  try {
-    const allVaccines = await Vaccine.find({});
-
-    if (allVaccines.length === 0) {
-      console.log('⚠️ لا توجد تطعيمات مسجلة في النظام لجدولتها.');
-      return;
-    }
-
-    const vaccinationRecords = allVaccines.map((vaccine) => {
-      // حساب تاريخ الاستحقاق: تاريخ الميلاد + عدد الشهور
-      const dueDate = new Date(child.dateOfBirth);
-      dueDate.setMonth(dueDate.getMonth() + vaccine.ageInMonths);
-
-      return {
-        child: child._id,
-        vaccine: vaccine._id,
-        vaccineName: vaccine.name,
-        dueDate: dueDate,
-        status: 'pending',
-      };
-    });
-
-    await ChildVaccination.insertMany(vaccinationRecords);
-    console.log(`✅ تم جدولة ${vaccinationRecords.length} تطعيم للطفل ${child.name}`);
-
-  } catch (error) {
-    console.error('❌ خطأ أثناء جدولة التطعيمات:', error);
-  }
+    // (انسخ الكود القديم هنا)
+    try {
+        const allVaccines = await Vaccine.find({});
+        if (allVaccines.length === 0) return;
+        const records = allVaccines.map(v => ({
+            child: child._id, vaccine: v._id, vaccineName: v.name,
+            dueDate: new Date(new Date(child.dateOfBirth).setMonth(new Date(child.dateOfBirth).getMonth() + v.ageInMonths)),
+            status: 'pending'
+        }));
+        await ChildVaccination.insertMany(records);
+    } catch (e) { console.error(e); }
 };
 
-
-/**
- * @desc    تسجيل مولود جديد (للموظفين فقط)
- * @route   POST /api/v1/children
- * @access  Private (Staff/Admin)
- */
+// 🔥 تعديل إضافة الطفل 🔥
 const createChild = asyncHandler(async (req, res) => {
-  // 1. التحقق إن المستخدم موظف أو أدمن
   if (req.user.role !== 'staff' && req.user.role !== 'super_admin') {
-    res.status(403);
-    throw new Error('غير مصرح لك بتسجيل مواليد. هذه وظيفة الموظف المختص.');
+    res.status(403); throw new Error('غير مصرح');
   }
 
   const { name, nationalId, dateOfBirth, gender, motherNationalId } = req.body;
 
-  // 2. التأكد من البيانات
-  if (!name || !nationalId || !dateOfBirth || !gender || !motherNationalId) {
-    res.status(400);
-    throw new Error('الرجاء إدخال جميع بيانات الطفل والأم');
+  // لازم نجيب بيانات الموظف كاملة مع مكان عمله عشان نعرف ننسخ العنوان للطفل
+  const staffUser = await User.findById(req.user._id).populate('workplace');
+
+  // تحقق أمني: هل الموظف مرتبط بوحدة صحية؟
+  if (req.user.role === 'staff' && !staffUser.workplace) {
+      res.status(400); throw new Error('هذا الموظف غير مرتبط بوحدة صحية! راجع الأدمن.');
   }
 
-  // 3. التحقق من عدم تكرار الطفل
   const childExists = await Child.findOne({ nationalId });
-  if (childExists) {
-    res.status(400);
-    throw new Error('هذا الطفل مسجل بالفعل (الرقم القومي مكرر)');
-  }
+  if (childExists) { res.status(400); throw new Error('الطفل مسجل بالفعل'); }
 
-  // 4. البحث عن حساب الأم لربطها فوراً لو موجودة
   const motherUser = await User.findOne({ nationalId: motherNationalId });
 
-  // 5. إنشاء الطفل مع وراثة مكان التسجيل من الموظف
-  // (لو السوبر أدمن هو اللي بيضيف، لازم نتاكد ان عنده workplace او نخليه يدخله يدوي، 
-  // بس هنفترض هنا ان السوبر أدمن ليه مكان او الموظف هو الاساس)
-  const workplace = req.user.workplace || { governorate: 'General', city: 'General', healthUnit: 'Ministry' };
+  // تجهيز بيانات المكان للطفل
+  let registrationLocation = {};
+  
+  if (req.user.role === 'staff') {
+      // لو موظف، خد بيانات وحدته
+      registrationLocation = {
+          governorate: staffUser.workplace.governorate,
+          city: staffUser.workplace.city,
+          healthUnit: staffUser.workplace.name
+      };
+  } else {
+      // لو سوبر أدمن (حالة نادرة)، حط قيم افتراضية
+      registrationLocation = { governorate: 'General', city: 'Ministry', healthUnit: 'Central' };
+  }
 
   const child = await Child.create({
-    name,
-    nationalId,
-    dateOfBirth,
-    gender,
-    motherNationalId,
+    name, nationalId, dateOfBirth, gender, motherNationalId,
     parentUser: motherUser ? motherUser._id : null,
-    registeredAt: {
-      governorate: workplace.governorate,
-      city: workplace.city,
-      healthUnit: workplace.healthUnit
-    },
+    registeredAt: registrationLocation, // 🔥 تم النسخ بنجاح
     createdBy: req.user._id
   });
 
   if (child) {
-    // تشغيل الجدولة التلقائية
     await scheduleVaccinesForChild(child);
     res.status(201).json(child);
   } else {
-    res.status(400);
-    throw new Error('بيانات الطفل غير صحيحة');
+    res.status(400); throw new Error('بيانات غير صحيحة');
   }
 });
 
-/**
- * @desc    جلب الأطفال (ذكي: للأم، للموظف، وللوزارة مع فلترة)
- * @route   GET /api/v1/children?governorate=...&city=...
- * @access  Private
- */
+// 🔥 تعديل جلب الأطفال 🔥
 const getChildren = asyncHandler(async (req, res) => {
   let query = {};
 
-  // 1️⃣ سيناريو الأم (User): تشوف ولادها بس
   if (req.user.role === 'user') {
     query = { parentUser: req.user._id };
   } 
-  
-  // 2️⃣ سيناريو الموظف (Staff): يشوف أطفال وحدته الصحية بس
   else if (req.user.role === 'staff') {
-    if (!req.user.workplace) {
-        res.status(400); throw new Error('بيانات الموظف غير مكتملة');
+    // لازم نجيب بيانات الموظف عشان نعرف هو في انهي وحدة
+    const staffUser = await User.findById(req.user._id).populate('workplace');
+    if (!staffUser.workplace) {
+        res.status(400); throw new Error('الموظف غير معين في وحدة');
     }
+    // الفلترة باسم الوحدة والمدينة
     query = { 
-      'registeredAt.healthUnit': req.user.workplace.healthUnit,
-      'registeredAt.city': req.user.workplace.city
+      'registeredAt.healthUnit': staffUser.workplace.name,
+      'registeredAt.city': staffUser.workplace.city
     };
   }
-  
-  // 3️⃣ سيناريو الوزارة (Super Admin): يشوف كله + فلترة
   else if (req.user.role === 'super_admin') {
-    query = {}; // الأساس هات كله
-
-    // فلتر بالمحافظة
-    if (req.query.governorate) {
-      query['registeredAt.governorate'] = req.query.governorate;
-    }
-    // فلتر بالمدينة
-    if (req.query.city) {
-      query['registeredAt.city'] = req.query.city;
-    }
-    // فلتر بالوحدة الصحية
-    if (req.query.healthUnit) {
-      query['registeredAt.healthUnit'] = req.query.healthUnit;
-    }
-    // بحث بالرقم القومي للطفل
-    if (req.query.nationalId) {
-      query['nationalId'] = req.query.nationalId;
-    }
+    query = {};
+    if (req.query.governorate) query['registeredAt.governorate'] = req.query.governorate;
+    if (req.query.city) query['registeredAt.city'] = req.query.city;
+    if (req.query.healthUnit) query['registeredAt.healthUnit'] = req.query.healthUnit;
+    if (req.query.nationalId) query['nationalId'] = req.query.nationalId;
   }
 
   const children = await Child.find(query).sort({ createdAt: -1 });
-
-  res.status(200).json({
-    count: children.length,
-    data: children
-  });
+  res.status(200).json({ count: children.length, data: children });
 });
 
-module.exports = {
-  createChild,
-  getChildren,
-};
+module.exports = { createChild, getChildren };

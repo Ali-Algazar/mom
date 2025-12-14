@@ -18,39 +18,29 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
-    // --- التعديل الجوهري الأول: الرقم القومي ---
-    // ده هيكون هو "مفتاح الربط" بين الأم وأطفالها
     nationalId: {
       type: String,
       required: [true, 'الرجاء إدخال الرقم القومي'],
-      unique: true, // لازم يكون فريد ومميز
-      length: 14,   // الرقم القومي المصري 14 رقم
-      trim: true,
+      unique: true,
+      length: 14,
     },
-    // --- التعديل الثاني: الصلاحيات الجديدة ---
     role: {
       type: String,
-      enum: ['user', 'staff', 'super_admin'], // user=أم, staff=موظف صحة, super_admin=وزارة
+      enum: ['user', 'staff', 'super_admin'],
       default: 'user',
     },
-    // --- التعديل الثالث: مكان العمل (للموظفين فقط) ---
+    // 🔥 التعديل هنا: الربط بجدول الوحدات الصحية 🔥
     workplace: {
-      governorate: { type: String }, // المحافظة
-      city: { type: String },        // المركز/المدينة
-      healthUnit: { type: String }   // اسم الوحدة الصحية
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HealthUnit', // الإشارة للموديل الجديد
+      // هذا الحقل مطلوب فقط لو المستخدم "موظف"
     },
-    // --- باقي الحقول زي ما هي ---
-    fcmToken: {
-      type: String,
-      default: null,
-    },
+    fcmToken: { type: String, default: null },
     googleId: { type: String, unique: true, sparse: true },
     facebookId: { type: String, unique: true, sparse: true },
     avatar: { type: String }
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('User', userSchema);
