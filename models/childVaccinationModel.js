@@ -1,46 +1,46 @@
-// models/childVaccinationModel.js
-
 const mongoose = require('mongoose');
 
-// هذا هو "سجل" التطعيم الفعلي للطفل
 const childVaccinationSchema = new mongoose.Schema(
   {
-    // --- (1. الربط بالأم) ---
-    parent: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-      ref: 'User', // يشير إلى الأم
-    },
-    // --- (2. الربط بالطفل) ---
+    // ❌ تم حذف حقل parent لأنه يسبب خطأ عند تسجيل الموظف للطفل
+    // (يمكننا الوصول للأم دائماً عن طريق حقل child)
+
+    // --- (1. الربط بالطفل) ---
     child: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: 'Child', // يشير إلى الطفل
+      ref: 'Child',
     },
-    // --- (3. الربط بالتطعيم الرئيسي) ---
+    
+    // --- (2. الربط بالتطعيم الرئيسي) ---
     vaccine: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: 'Vaccine', // يشير إلى التطعيم من القائمة الرئيسية
+      ref: 'Vaccine',
     },
+
+    // (حقل إضافي لتخزين اسم التطعيم لتسهيل العرض بدون Populate)
+    vaccineName: { 
+      type: String 
+    }, 
     
-    // --- (4. بيانات المتابعة) ---
+    // --- (3. بيانات المتابعة) ---
     dueDate: {
       type: Date,
-      required: true, // تاريخ الاستحقاق المحسوب
+      required: true,
     },
     status: {
       type: String,
-      required: true,
-      enum: ['pending', 'done', 'missed'], // (قادم، تم، فات الميعاد)
+      enum: ['pending', 'completed', 'missed'], 
       default: 'pending',
     },
-    // (تاريخ إعطاء الجرعة الفعلي - تسجله الأم)
+    
+    // تاريخ إعطاء الجرعة الفعلي
     dateAdministered: {
-      type: Date, // يكون "null" طالما الحالة "pending"
+      type: Date,
     },
     
-    // (يمكن إضافة ملاحظات هنا)
+    // ملاحظات الموظف
     notes: {
       type: String,
     }
@@ -50,7 +50,7 @@ const childVaccinationSchema = new mongoose.Schema(
   }
 );
 
-// (إضافة "فهرس" لضمان عدم تكرار نفس التطعيم لنفس الطفل)
+// منع تكرار نفس التطعيم لنفس الطفل
 childVaccinationSchema.index({ child: 1, vaccine: 1 }, { unique: true });
 
 module.exports = mongoose.model('ChildVaccination', childVaccinationSchema);
