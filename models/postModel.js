@@ -1,5 +1,3 @@
-// models/postModel.js
-
 const mongoose = require('mongoose');
 
 const postSchema = new mongoose.Schema(
@@ -23,9 +21,8 @@ const postSchema = new mongoose.Schema(
     // --- (الحقل الجديد للإعجابات) ---
     likes: [{
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User', // كل عنصر في القائمة هو ID مستخدم
+      ref: 'User',
     }],
-    // --------------------------------
   },
   {
     timestamps: true,

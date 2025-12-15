@@ -1,5 +1,3 @@
-// routes/postRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
@@ -7,31 +5,31 @@ const {
   getAllPosts,
   getPostById,
   deletePost,
-  likePost, // <-- استيراد الوظيفة الجديدة
+  likePost,
 } = require('../controllers/postController');
+
+// بنجيب دالة إضافة الكومنت من الكنترولر التاني عشان نربطها هنا
 const { addComment } = require('../controllers/commentController');
+
 const { protect } = require('../middleware/authMiddleware');
 
-// --- (تنظيم المسارات) ---
+// كل البوستات محتاجة تسجيل دخول
+router.use(protect);
 
-// المسارات لـ /api/v1/posts
 router
   .route('/')
-  .post(protect, createPost)
-  .get(protect, getAllPosts);
+  .post(createPost)
+  .get(getAllPosts);
 
-// المسارات لـ /api/v1/posts/:postId
 router
   .route('/:postId')
-  .get(protect, getPostById)
-  .delete(protect, deletePost);
+  .get(getPostById)
+  .delete(deletePost);
 
-// مسار لإضافة كومنت
-router.post('/:postId/comments', protect, addComment);
+// مسار اللايك
+router.put('/:postId/like', likePost);
 
-// --- (المسار الجديد للإعجاب) ---
-// PUT /api/v1/posts/:postId/like
-router.put('/:postId/like', protect, likePost); // <-- إضافة المسار الجديد
-// -------------------------------
+// مسار إضافة كومنت على البوست
+router.post('/:postId/comments', addComment);
 
 module.exports = router;
