@@ -1,5 +1,3 @@
-// models/medicineModel.js
-
 const mongoose = require('mongoose');
 
 const medicineSchema = new mongoose.Schema(
@@ -9,9 +7,9 @@ const medicineSchema = new mongoose.Schema(
       required: [true, 'الرجاء إدخال اسم الدواء'],
       unique: true,
     },
-imageUrl: {
-        type: String,
-        default: 'https://via.placeholder.com/150?text=Medicine+Image' // صورة افتراضية
+    imageUrl: {
+      type: String,
+      default: 'https://via.placeholder.com/150?text=Medicine+Image'
     },
     description: {
       type: String,
@@ -39,15 +37,15 @@ imageUrl: {
     sideEffects: {
       type: String,
     },
-    // (رابط المقال بالمؤلف - الأدمن)
+    // (رابط الدواء بالمؤلف - الأدمن)
     addedBy: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: 'User', // يشير إلى نموذج "User" (الأدمن الذي أضافه)
+      ref: 'User',
     },
   },
   {
-    timestamps: true, // لإضافة createdAt و updatedAt
+    timestamps: true,
   }
 );
 
