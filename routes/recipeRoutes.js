@@ -1,21 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getRecipes,
-  getRecipeById,
   createRecipe,
+  getAllRecipes,
+  getRecipeById,
   updateRecipe,
   deleteRecipe,
 } = require('../controllers/recipeController');
 
-// 🔥 التصحيح 🔥
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-router.route('/')
-  .get(getRecipes)
-  .post(protect, authorize('super_admin'), createRecipe);
+router
+  .route('/')
+  .post(protect, authorize('super_admin'), createRecipe) // الوزارة فقط
+  .get(getAllRecipes); // للجميع
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(getRecipeById)
   .put(protect, authorize('super_admin'), updateRecipe)
   .delete(protect, authorize('super_admin'), deleteRecipe);

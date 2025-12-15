@@ -1,5 +1,3 @@
-// models/recipeModel.js
-
 const mongoose = require('mongoose');
 
 const recipeSchema = new mongoose.Schema(
@@ -24,8 +22,6 @@ const recipeSchema = new mongoose.Schema(
     ageGroup: {
       type: String,
       required: [true, 'الرجاء تحديد الفئة العمرية (مثال: 6-8 شهور)'],
-      // (ممكن نستخدم enum لو المراحل ثابتة)
-      // enum: ['6-8m', '9-11m', '12m+']
     },
     // (التصنيف)
     category: {
