@@ -1,5 +1,3 @@
-// routes/diaryEntryRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const {
@@ -11,21 +9,12 @@ const {
 
 const { protect } = require('../middleware/authMiddleware');
 
-// --- (تنظيم المسارات) ---
+router.use(protect);
 
-// إضافة سجل يوميات جديد
-// POST /api/v1/diary
-router.post('/', protect, addDiaryEntry);
-
-// جلب كل سجلات طفل معين
-// GET /api/v1/diary/child/:childId
-router.get('/child/:childId', protect, getChildDiaryEntries);
-
-// تعديل أو حذف سجل معين
-// PUT & DELETE /api/v1/diary/:entryId
-router
-  .route('/:entryId')
-  .put(protect, updateDiaryEntry)
-  .delete(protect, deleteDiaryEntry);
+router.post('/', addDiaryEntry);
+router.get('/child/:childId', getChildDiaryEntries);
+router.route('/:entryId')
+  .put(updateDiaryEntry)
+  .delete(deleteDiaryEntry);
 
 module.exports = router;

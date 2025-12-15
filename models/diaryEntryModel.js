@@ -1,11 +1,10 @@
-// models/diaryEntryModel.js
-
 const mongoose = require('mongoose');
 
 const diaryEntrySchema = new mongoose.Schema(
   {
     // --- (1. الربط) ---
-    parent: {
+    // 🔥 تم التعديل إلى parentUser للتوافق 🔥
+    parentUser: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
       ref: 'User',
@@ -26,19 +25,19 @@ const diaryEntrySchema = new mongoose.Schema(
       required: [true, 'الرجاء إدخال وصف الذكرى'],
     },
     
-    // (رابط الصورة التي سترفعها الأم)
+    // (رابط الصورة)
     imageUrl: {
       type: String,
     },
 
-    // (تاريخ الذكرى - قد يختلف عن تاريخ الإنشاء)
+    // (تاريخ الذكرى)
     dateOfMemory: {
       type: Date,
       required: true,
       default: Date.now,
     },
 
-    // (يمكن إضافة "معلم تطوري" هنا، مثل "أول خطوة")
+    // (معلم تطوري: أول كلمة، أول خطوة...)
     milestone: {
       type: String,
     }
@@ -48,7 +47,7 @@ const diaryEntrySchema = new mongoose.Schema(
   }
 );
 
-// فهرس لزيادة سرعة جلب يوميات الطفل
+// الفهرس
 diaryEntrySchema.index({ child: 1, dateOfMemory: -1 });
 
 module.exports = mongoose.model('DiaryEntry', diaryEntrySchema);

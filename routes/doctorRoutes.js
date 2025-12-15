@@ -1,25 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getDoctors,
-  getDoctorById,
   createDoctor,
+  getNearbyDoctors,
+  getAllDoctors,
+  getDoctorById,
   updateDoctor,
   deleteDoctor,
-  getNearbyDoctors // لو عندك دالة البحث عن القريبين
 } = require('../controllers/doctorController');
 
-// 🔥 التصحيح 🔥
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// البحث عن الأطباء (متاح للكل)
-router.get('/', getDoctors);
-router.get('/nearby', getNearbyDoctors); // لو موجودة
-router.get('/:id', getDoctorById);
+// هام: مسار "nearby" لازم يكون قبل ":id"
+router.get('/nearby', getNearbyDoctors);
 
-// الإدارة (للوزارة Super Admin فقط)
-router.post('/', protect, authorize('super_admin'), createDoctor);
-router.put('/:id', protect, authorize('super_admin'), updateDoctor);
-router.delete('/:id', protect, authorize('super_admin'), deleteDoctor);
+router
+  .route('/')
+  .get(getAllDoctors) // الكل يشوف
+  .post(protect, authorize('super_admin'), createDoctor); // الوزارة بس تضيف
+
+router
+  .route('/:id')
+  .get(getDoctorById) // الكل يشوف التفاصيل
+  .put(protect, authorize('super_admin'), updateDoctor)   // الوزارة بس تعدل
+  .delete(protect, authorize('super_admin'), deleteDoctor); // الوزارة بس تحذف
 
 module.exports = router;
