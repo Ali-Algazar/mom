@@ -1,86 +1,116 @@
-const Article = require('../models/articleModel'); // تأكد إن الموديل موجود
+
 const asyncHandler = require('express-async-handler');
+const Article = require('../models/articleModel');
 
-// @desc    جلب كل المقالات
-// @route   GET /api/v1/articles
-// @access  Public
-const getArticles = asyncHandler(async (req, res) => {
-  const articles = await Article.find().sort({ createdAt: -1 });
-  res.status(200).json(articles);
-});
-
-// @desc    جلب مقال واحد
-// @route   GET /api/v1/articles/:id
-// @access  Public
-const getArticleById = asyncHandler(async (req, res) => {
-  const article = await Article.findById(req.params.id);
-  if (!article) {
-    res.status(404);
-    throw new Error('المقال غير موجود');
-  }
-  res.status(200).json(article);
-});
-
-// @desc    إضافة مقال جديد
-// @route   POST /api/v1/articles
-// @access  Private (Super Admin)
+/**
+ * @desc    Create a new article
+ * @route   POST /api/v1/articles
+ * @access  Private/Admin
+ */
 const createArticle = asyncHandler(async (req, res) => {
-  const { title, content, imageUrl, category } = req.body;
+  const { title, content, category, imageUrl } = req.body;
 
-  if (!title || !content) {
+  if (!title || !content || !category) {
     res.status(400);
-    throw new Error('يرجى إضافة العنوان والمحتوى');
+    throw new Error('Please provide title, content, and category');
   }
 
   const article = await Article.create({
     title,
     content,
-    imageUrl,
     category,
-    user: req.user._id, // الموظف/الأدمن اللي كتب المقال
+    imageUrl, 
+    author: req.user.id, 
   });
 
   res.status(201).json(article);
 });
 
-// @desc    تعديل مقال
-// @route   PUT /api/v1/articles/:id
-// @access  Private (Super Admin)
+/**
+ * @desc    Get all articles (can be filtered by category)
+ * @route   GET /api/v1/articles
+ * @access  Public
+ */
+const getAllArticles = asyncHandler(async (req, res) => {
+  let query = {};
+
+  if (req.query.category) {
+    query.category = req.query.category;
+  }
+
+
+  const articles = await Article.find(query)
+    .populate('author', 'name')
+    .sort({ createdAt: 'desc' });
+
+  res.status(200).json(articles);
+});
+
+/**
+ * @desc    Get a single article by ID
+ * @route   GET /api/v1/articles/:id
+ * @access  Public
+ */
+const getArticleById = asyncHandler(async (req, res) => {
+  const article = await Article.findById(req.params.id).populate('author', 'name');
+
+  if (article) {
+    res.status(200).json(article);
+  } else {
+    res.status(404);
+    throw new Error('Article not found');
+  }
+});
+
+/**
+ * @desc    Update an article
+ * @route   PUT /api/v1/articles/:id
+ * @access  Private/Admin
+ */
 const updateArticle = asyncHandler(async (req, res) => {
   const article = await Article.findById(req.params.id);
 
   if (!article) {
     res.status(404);
-    throw new Error('المقال غير موجود');
+    throw new Error('Article not found');
   }
 
-  const updatedArticle = await Article.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-  });
+  const updatedArticle = await Article.findByIdAndUpdate(
+    req.params.id,
+    req.body, 
+    {
+      new: true, 
+      runValidators: true, 
+    }
+  ).populate('author', 'name'); 
 
   res.status(200).json(updatedArticle);
 });
 
-// @desc    حذف مقال
-// @route   DELETE /api/v1/articles/:id
-// @access  Private (Super Admin)
+
+/**
+ * @desc    Delete an article
+ * @route   DELETE /api/v1/articles/:id
+ * @access  Private/Admin
+ */
 const deleteArticle = asyncHandler(async (req, res) => {
   const article = await Article.findById(req.params.id);
 
   if (!article) {
     res.status(404);
-    throw new Error('المقال غير موجود');
+    throw new Error('Article not found');
   }
 
-  await article.deleteOne();
-  res.status(200).json({ message: 'تم حذف المقال بنجاح' });
+  await Article.findByIdAndDelete(req.params.id); 
+
+  res.status(200).json({ success: true, message: 'Article deleted successfully' });
 });
 
-// 🔥 تصدير الدوال بنفس الأسماء اللي استخدمناها في الـ Route 🔥
+
 module.exports = {
-  getArticles,
-  getArticleById,
   createArticle,
+  getAllArticles,
+  getArticleById,
   updateArticle,
   deleteArticle,
 };
