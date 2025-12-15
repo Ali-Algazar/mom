@@ -1,140 +1,115 @@
-// controllers/dailyLogController.js
-
 const asyncHandler = require('express-async-handler');
 const DailyLog = require('../models/dailyLogModel');
-const Child = require('../models/childModel'); // نحتاجه للتحقق من الملكية
+const Child = require('../models/childModel');
 
 /**
  * @desc    إضافة سجل يومي جديد (رضاعة، حفاض، نوم)
  * @route   POST /api/v1/logs
- * @access  Private
+ * @access  Private (الأم فقط)
  */
 const addDailyLog = asyncHandler(async (req, res) => {
   const { child, logType, startTime, ...otherData } = req.body;
 
-  // التحقق من المدخلات الأساسية
   if (!child || !logType || !startTime) {
-    res.status(400);
-    throw new Error('الرجاء إدخال بيانات الطفل، نوع السجل، ووقت البدء');
+    res.status(400); throw new Error('بيانات ناقصة (الطفل، النوع، وقت البدء)');
   }
 
-  // --- (خطوة أمنية) ---
-  // التأكد من أن الطفل يخص المستخدم المسجل دخوله
   const childDoc = await Child.findById(child);
   if (!childDoc) {
-    res.status(404);
-    throw new Error('لم يتم العثور على الطفل');
-  }
-  if (childDoc.parent.toString() !== req.user.id) {
-    res.status(401);
-    throw new Error('غير مصرح لك بإضافة سجلات لهذا الطفل');
+    res.status(404); throw new Error('لم يتم العثور على الطفل');
   }
 
-  // إنشاء السجل
+  // 🔥 التعديل هنا: parentUser بدلاً من parent 🔥
+  if (childDoc.parentUser.toString() !== req.user._id.toString()) {
+    res.status(401); throw new Error('غير مصرح لك بإضافة سجلات لهذا الطفل');
+  }
+
   const log = await DailyLog.create({
-    parent: req.user.id, // الربط بالأم
+    parentUser: req.user._id, // حفظنا الأم
     child,
     logType,
     startTime,
-    ...otherData, // (باقي البيانات مثل quantity, diaperType, etc.)
+    ...otherData,
   });
 
   res.status(201).json(log);
 });
 
 /**
- * @desc    جلب كل السجلات اليومية لطفل معين
+ * @desc    جلب سجلات طفل
  * @route   GET /api/v1/logs/child/:childId
- * @access  Private
+ * @access  Private (الأم والوزارة)
  */
 const getChildDailyLogs = asyncHandler(async (req, res) => {
   const { childId } = req.params;
 
-  // --- (خطوة أمنية) ---
   const childDoc = await Child.findById(childId);
   if (!childDoc) {
-    res.status(404);
-    throw new Error('لم يتم العثور على الطفل');
-  }
-  if (childDoc.parent.toString() !== req.user.id) {
-    res.status(401);
-    throw new Error('غير مصرح لك بعرض هذه السجلات');
+    res.status(404); throw new Error('لم يتم العثور على الطفل');
   }
 
-  // --- (الفلترة) ---
+  // الحماية: الأم صاحبة الطفل أو السوبر أدمن
+  const isParent = childDoc.parentUser.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === 'super_admin';
+
+  if (!isParent && !isAdmin) {
+    res.status(401); throw new Error('غير مصرح لك بعرض هذه السجلات');
+  }
+
   let query = { child: childId };
-  // السماح بالفلترة حسب نوع السجل
-  // مثال: GET /api/v1/logs/child/:childId?type=feeding
   if (req.query.type) {
     query.logType = req.query.type;
   }
 
-  // جلب السجلات مرتبة بالتاريخ (الأحدث أولاً)
-  const logs = await DailyLog.find(query).sort({
-    startTime: 'desc',
-  });
-
+  const logs = await DailyLog.find(query).sort({ startTime: -1 });
   res.status(200).json(logs);
 });
 
 /**
- * @desc    تعديل سجل يومي
+ * @desc    تعديل سجل
  * @route   PUT /api/v1/logs/:logId
- * @access  Private
+ * @access  Private (الأم فقط)
  */
 const updateDailyLog = asyncHandler(async (req, res) => {
-  const { logId } = req.params;
-
-  const log = await DailyLog.findById(logId);
+  const log = await DailyLog.findById(req.params.logId);
 
   if (!log) {
-    res.status(404);
-    throw new Error('لم يتم العثور على السجل');
+    res.status(404); throw new Error('السجل غير موجود');
   }
 
-  // --- (خطوة أمنية) ---
-  // التأكد من أن السجل يخص المستخدم
-  if (log.parent.toString() !== req.user.id) {
-    res.status(401);
-    throw new Error('غير مصرح لك بتعديل هذا السجل');
+  // الأم بس اللي تعدل يومياتها
+  if (log.parentUser.toString() !== req.user._id.toString()) {
+    res.status(401); throw new Error('غير مصرح لك بالتعديل');
   }
 
   const updatedLog = await DailyLog.findByIdAndUpdate(
-    logId,
+    req.params.logId,
     req.body,
-    {
-      new: true,
-      runValidators: true,
-    }
+    { new: true, runValidators: true }
   );
 
   res.status(200).json(updatedLog);
 });
 
 /**
- * @desc    حذف سجل يومي
+ * @desc    حذف سجل
  * @route   DELETE /api/v1/logs/:logId
- * @access  Private
+ * @access  Private (الأم والوزارة)
  */
 const deleteDailyLog = asyncHandler(async (req, res) => {
-  const { logId } = req.params;
-
-  const log = await DailyLog.findById(logId);
+  const log = await DailyLog.findById(req.params.logId);
 
   if (!log) {
-    res.status(404);
-    throw new Error('لم يتم العثور على السجل');
+    res.status(404); throw new Error('السجل غير موجود');
   }
 
-  // --- (خطوة أمنية) ---
-  if (log.parent.toString() !== req.user.id) {
-    res.status(401);
-    throw new Error('غير مصرح لك بحذف هذا السجل');
+  // الحماية: الأم أو الأدمن
+  if (log.parentUser.toString() !== req.user._id.toString() && req.user.role !== 'super_admin') {
+    res.status(401); throw new Error('غير مصرح لك بالحذف');
   }
 
-  await DailyLog.findByIdAndDelete(logId);
-
-  res.status(200).json({ success: true, message: 'تم حذف السجل بنجاح' });
+  await log.deleteOne();
+  res.status(200).json({ success: true, message: 'تم الحذف' });
 });
 
 module.exports = {

@@ -1,11 +1,10 @@
-// models/dailyLogModel.js
-
 const mongoose = require('mongoose');
 
 const dailyLogSchema = new mongoose.Schema(
   {
     // --- (1. الربط) ---
-    parent: {
+    // 🔥 التعديل هنا: غيرنا الاسم لـ parentUser عشان يتوافق مع باقي النظام 🔥
+    parentUser: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
       ref: 'User',
@@ -49,8 +48,6 @@ const dailyLogSchema = new mongoose.Schema(
       type: String,
       enum: ['wet', 'dirty', 'both'], // مبلل، متسخ، كلاهما
     },
-
-    // (حقل "endTime" المشترك يمكن استخدامه لتسجيل "نهاية النوم")
   },
   {
     timestamps: true,
