@@ -1,5 +1,3 @@
-// models/soundModel.js
-
 const mongoose = require('mongoose');
 
 const soundSchema = new mongoose.Schema(
@@ -17,12 +15,12 @@ const soundSchema = new mongoose.Schema(
       enum: ['colic', 'sleep', 'calm', 'nature', 'white-noise'],
       default: 'calm',
     },
-    // (رابط ملف الصوت نفسه - مهم جداً)
+    // (رابط ملف الصوت نفسه)
     audioUrl: {
       type: String,
       required: [true, 'الرجاء إدخال رابط ملف الصوت'],
     },
-    // (رابط صورة مصغرة للصوت - اختياري)
+    // (رابط صورة مصغرة)
     imageUrl: {
       type: String,
     },
