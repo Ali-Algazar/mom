@@ -1,26 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getFaqs,
-  searchFaqs,
   createFaq,
+  getAllFaqs,
+  searchFaqs,
+  getFaqById,
   updateFaq,
   deleteFaq,
 } = require('../controllers/faqController');
 
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// البحث متاح للكل
-router.post('/search', searchFaqs);
-router.get('/', getFaqs); // عرض الأسئلة متاح للكل (أو ممكن تخليه محمي)
+// هام: مسار البحث أولاً
+router.get('/search', searchFaqs);
 
-// باقي العمليات (إضافة/تعديل/حذف) للوزارة والموظفين فقط
-router.use(protect); // تفعيل الحماية لكل اللي جاي
+router
+  .route('/')
+  .post(protect, authorize('super_admin'), createFaq)
+  .get(getAllFaqs);
 
-router.post('/', authorize('super_admin', 'staff'), createFaq);
-
-router.route('/:id')
-  .put(authorize('super_admin'), updateFaq)
-  .delete(authorize('super_admin'), deleteFaq);
+router
+  .route('/:id')
+  .get(getFaqById)
+  .put(protect, authorize('super_admin'), updateFaq)
+  .delete(protect, authorize('super_admin'), deleteFaq);
 
 module.exports = router;

@@ -1,5 +1,3 @@
-// models/faqModel.js
-
 const mongoose = require('mongoose');
 
 const faqSchema = new mongoose.Schema(
@@ -13,7 +11,6 @@ const faqSchema = new mongoose.Schema(
       type: String,
       required: [true, 'الرجاء إدخال الإجابة الجاهزة'],
     },
-    // (لتصنيف الأسئلة، مثلما فعلنا في المقالات)
     category: {
       type: String,
       required: true,
@@ -25,14 +22,11 @@ const faqSchema = new mongoose.Schema(
       ],
       default: 'general',
     },
-    // (يمكن إضافة "كلمات مفتاحية" لمساعدة البوت في البحث)
-    keywords: [String],
-
-    // (رابط السؤال بالمؤلف - الأدمن)
+    keywords: [String], // الكلمات المفتاحية
     addedBy: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: 'User', // يشير إلى نموذج "User" (الأدمن الذي أضافه)
+      ref: 'User',
     },
   },
   {
