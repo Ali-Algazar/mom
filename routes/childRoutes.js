@@ -1,26 +1,29 @@
 const express = require('express');
 const router = express.Router();
+const { protect, authorize } = require('../middleware/authMiddleware');
 const {
   createChild,
   getChildren,
+  getMyChildren, // استيراد الدالة الجديدة
   getChildById,
   updateChild,
-  deleteChild,
+  deleteChild
 } = require('../controllers/childController');
 
-const { protect, authorize } = require('../middleware/authMiddleware');
+// الترتيب مهم جداً هنا!
 
-router.use(protect); // حماية للكل
+// 1. الراوتس العامة للكنترولر (إضافة وجلب الكل)
+router.route('/')
+  .post(protect, authorize('staff', 'super_admin'), createChild)
+  .get(protect, authorize('staff', 'super_admin'), getChildren);
 
-router
-  .route('/')
-  .get(getChildren) // الكل يشوف (بشروطه)
-  .post(authorize('staff', 'super_admin'), createChild); // إضافة (موظف/وزارة)
+// 2. راوت الأم (لازم يجي قبل الـ :id)
+router.get('/my-children', protect, authorize('user'), getMyChildren);
 
-router
-  .route('/:id')
-  .get(getChildById) // الكل يشوف تفاصيل (بشروطه)
-  .put(authorize('staff', 'super_admin'), updateChild) // تعديل (موظف/وزارة)
-  .delete(authorize('super_admin'), deleteChild); // حذف (وزارة فقط)
+// 3. راوتس العمليات بالـ ID (في الآخر)
+router.route('/:id')
+  .get(protect, getChildById)
+  .put(protect, authorize('staff', 'super_admin'), updateChild)
+  .delete(protect, authorize('super_admin'), deleteChild);
 
 module.exports = router;
