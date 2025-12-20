@@ -47,13 +47,12 @@ const createChild = asyncHandler(async (req, res) => {
     res.status(403); throw new Error('غير مصرح لك بإضافة مواليد');
   }
 
-  // 2. استقبال البيانات (لاحظ استخدام dateOfBirth ليطابق الموديل)
+  // 2. استقبال البيانات (dateOfBirth بدلاً من birthDate)
   const { name, nationalId, dateOfBirth, gender, motherNationalId } = req.body;
 
   // 3. التحقق من بيانات الموظف ومكان عمله
   const staffUser = await User.findById(req.user._id).populate('workplace');
   
-  // لو موظف، لازم يكون ليه مكان عمل
   if (req.user.role === 'staff' && !staffUser.workplace) {
       res.status(400); throw new Error('هذا الموظف غير مرتبط بوحدة صحية، يرجى مراجعة الأدمن');
   }
@@ -65,12 +64,13 @@ const createChild = asyncHandler(async (req, res) => {
   // 5. البحث عن الأم لربطها (لو ليها حساب حالياً)
   const motherUser = await User.findOne({ nationalId: motherNationalId });
 
-  // 6. 🔥 تحديد موقع التسجيل تلقائياً (Auto-fill) 🔥
+  // 6. 🔥 تحديد موقع التسجيل تلقائياً (الحل النهائي لمشكلة city) 🔥
   let location = {};
   if (req.user.role === 'staff') {
       location = {
-          governorate: staffUser.workplace.governorate,
-          city: staffUser.workplace.district, 
+          governorate: staffUser.workplace.governorate || "غير محدد",
+          // هنا الجوكر: لو ملقاش city ياخد district، لو ملقاش يكتب "غير محدد"
+          city: staffUser.workplace.city || staffUser.workplace.district || "غير محدد", 
           healthUnit: staffUser.workplace.name // حفظ اسم الوحدة
       };
   } else {
