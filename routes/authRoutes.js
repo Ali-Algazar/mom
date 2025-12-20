@@ -12,29 +12,46 @@ const {
   updateUserProfile,
   deleteMyAccount,
   deleteUserByAdmin,
-} = require('../controllers/userController');
+} = require('../controllers/authController');
 
-const { protect, admin } = require('../middleware/authMiddleware'); // تأكد من مسار الميدلوير
+// ✅ التعديل هنا: استدعاء authorize بدلاً من admin
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// 1. التوثيق العام (Public)
+// =================================================================
+// 1. التوثيق العام (Public) - متاح للجميع
+// =================================================================
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.post('/google', googleLogin);
 router.post('/facebook', facebookLogin);
-router.post('/setup-admin', createFirstAdmin); // تشغيل مرة واحدة فقط
+router.post('/setup-admin', createFirstAdmin); // يُستخدم مرة واحدة
 
-// 2. إدارة الحساب الشخصي (Private - Logged In User)
-// (كل الراوتس اللي تحت دي محتاجة تسجيل دخول)
+// =================================================================
+// 2. إدارة الحساب الشخصي (Private) - يتطلب تسجيل دخول
+// =================================================================
+// تطبيق حماية التوكن على كل الروابط القادمة
 router.use(protect);
 
 router.get('/me', getMe);
 router.put('/fcm-token', updateFcmToken);
-router.put('/profile', updateUserProfile);   // تعديل البيانات
+router.put('/profile', updateUserProfile);   // تعديل بياناتي
 router.delete('/profile', deleteMyAccount);  // حذف حسابي
 
-// 3. إدارة الأدمن (Admin Only)
-// (إنشاء موظفين + حذف أي حد)
-router.post('/admin/create-staff', admin, createStaff);
-router.delete('/users/:id', admin, deleteUserByAdmin); // الوزارة تحذف أي يوزر
+// =================================================================
+// 3. إدارة الأدمن (Admin Only) - للوزارة فقط
+// =================================================================
+// ✅ التعديل هنا: استخدام authorize('super_admin')
+
+router.post(
+  '/admin/create-staff', 
+  authorize('super_admin'), // مسموح للأدمن فقط
+  createStaff
+);
+
+router.delete(
+  '/users/:id', 
+  authorize('super_admin'), // مسموح للأدمن فقط
+  deleteUserByAdmin
+);
 
 module.exports = router;
