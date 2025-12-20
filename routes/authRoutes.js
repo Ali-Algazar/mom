@@ -3,28 +3,38 @@ const router = express.Router();
 const {
   registerUser,
   loginUser,
-  getMe,
   googleLogin,
   facebookLogin,
   createStaff,
   createFirstAdmin,
-  updateFcmToken // <-- استيراد الدالة الجديدة
-} = require('../controllers/authController');
+  getMe,
+  updateFcmToken,
+  updateUserProfile,
+  deleteMyAccount,
+  deleteUserByAdmin,
+} = require('../controllers/userController');
 
-const { protect, authorize } = require('../middleware/authMiddleware');
+const { protect, admin } = require('../middleware/authMiddleware'); // تأكد من مسار الميدلوير
 
-// مسارات عامة
+// 1. التوثيق العام (Public)
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.post('/google', googleLogin);
 router.post('/facebook', facebookLogin);
-router.post('/setup-admin', createFirstAdmin);
+router.post('/setup-admin', createFirstAdmin); // تشغيل مرة واحدة فقط
 
-// مسارات محمية
-router.get('/me', protect, getMe);
-router.put('/fcm-token', protect, updateFcmToken); // 🔥 الرابط الجديد
+// 2. إدارة الحساب الشخصي (Private - Logged In User)
+// (كل الراوتس اللي تحت دي محتاجة تسجيل دخول)
+router.use(protect);
 
-// مسارات الأدمن
-router.post('/admin/create-staff', protect, authorize('super_admin'), createStaff);
+router.get('/me', getMe);
+router.put('/fcm-token', updateFcmToken);
+router.put('/profile', updateUserProfile);   // تعديل البيانات
+router.delete('/profile', deleteMyAccount);  // حذف حسابي
+
+// 3. إدارة الأدمن (Admin Only)
+// (إنشاء موظفين + حذف أي حد)
+router.post('/admin/create-staff', admin, createStaff);
+router.delete('/users/:id', admin, deleteUserByAdmin); // الوزارة تحذف أي يوزر
 
 module.exports = router;
